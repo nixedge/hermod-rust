@@ -4,7 +4,7 @@
 //! wire-protocol compatibility.
 
 use chrono::{DateTime, Utc};
-use minicbor::{Decode, Encode};
+use pallas_codec::minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -33,11 +33,11 @@ pub enum Severity {
 }
 
 impl Encode<()> for Severity {
-    fn encode<W: minicbor::encode::Write>(
+    fn encode<W: pallas_codec::minicbor::encode::Write>(
         &self,
-        e: &mut minicbor::Encoder<W>,
+        e: &mut pallas_codec::minicbor::Encoder<W>,
         _ctx: &mut (),
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+    ) -> Result<(), pallas_codec::minicbor::encode::Error<W::Error>> {
         e.u8(*self as u8)?;
         Ok(())
     }
@@ -45,9 +45,9 @@ impl Encode<()> for Severity {
 
 impl<'b> Decode<'b, ()> for Severity {
     fn decode(
-        d: &mut minicbor::Decoder<'b>,
+        d: &mut pallas_codec::minicbor::Decoder<'b>,
         _ctx: &mut (),
-    ) -> Result<Self, minicbor::decode::Error> {
+    ) -> Result<Self, pallas_codec::minicbor::decode::Error> {
         let val = d.u8()?;
         match val {
             0 => Ok(Severity::Debug),
@@ -58,7 +58,7 @@ impl<'b> Decode<'b, ()> for Severity {
             5 => Ok(Severity::Critical),
             6 => Ok(Severity::Alert),
             7 => Ok(Severity::Emergency),
-            _ => Err(minicbor::decode::Error::message("invalid severity value")),
+            _ => Err(pallas_codec::minicbor::decode::Error::message("invalid severity value")),
         }
     }
 }
@@ -95,11 +95,11 @@ pub enum DetailLevel {
 }
 
 impl Encode<()> for DetailLevel {
-    fn encode<W: minicbor::encode::Write>(
+    fn encode<W: pallas_codec::minicbor::encode::Write>(
         &self,
-        e: &mut minicbor::Encoder<W>,
+        e: &mut pallas_codec::minicbor::Encoder<W>,
         _ctx: &mut (),
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+    ) -> Result<(), pallas_codec::minicbor::encode::Error<W::Error>> {
         e.u8(*self as u8)?;
         Ok(())
     }
@@ -107,16 +107,16 @@ impl Encode<()> for DetailLevel {
 
 impl<'b> Decode<'b, ()> for DetailLevel {
     fn decode(
-        d: &mut minicbor::Decoder<'b>,
+        d: &mut pallas_codec::minicbor::Decoder<'b>,
         _ctx: &mut (),
-    ) -> Result<Self, minicbor::decode::Error> {
+    ) -> Result<Self, pallas_codec::minicbor::decode::Error> {
         let val = d.u8()?;
         match val {
             0 => Ok(DetailLevel::DMinimal),
             1 => Ok(DetailLevel::DNormal),
             2 => Ok(DetailLevel::DDetailed),
             3 => Ok(DetailLevel::DMaximum),
-            _ => Err(minicbor::decode::Error::message("invalid detail level")),
+            _ => Err(pallas_codec::minicbor::decode::Error::message("invalid detail level")),
         }
     }
 }
@@ -157,11 +157,11 @@ pub struct TraceObject {
 }
 
 impl Encode<()> for TraceObject {
-    fn encode<W: minicbor::encode::Write>(
+    fn encode<W: pallas_codec::minicbor::encode::Write>(
         &self,
-        e: &mut minicbor::Encoder<W>,
+        e: &mut pallas_codec::minicbor::Encoder<W>,
         ctx: &mut (),
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+    ) -> Result<(), pallas_codec::minicbor::encode::Error<W::Error>> {
         // Encode as an 8-element array matching the Haskell record order
         e.array(8)?;
 
@@ -193,7 +193,7 @@ impl Encode<()> for TraceObject {
 
         // toTimestamp :: UTCTime
         // Encode as CBOR tag 1 (epoch time) with a float
-        e.tag(minicbor::data::Tag::new(1))?;
+        e.tag(pallas_codec::minicbor::data::Tag::new(1))?;
         let timestamp_secs = self.to_timestamp.timestamp() as f64
             + (self.to_timestamp.timestamp_subsec_nanos() as f64 / 1_000_000_000.0);
         e.f64(timestamp_secs)?;
@@ -210,12 +210,12 @@ impl Encode<()> for TraceObject {
 
 impl<'b> Decode<'b, ()> for TraceObject {
     fn decode(
-        d: &mut minicbor::Decoder<'b>,
+        d: &mut pallas_codec::minicbor::Decoder<'b>,
         ctx: &mut (),
-    ) -> Result<Self, minicbor::decode::Error> {
+    ) -> Result<Self, pallas_codec::minicbor::decode::Error> {
         let len = d.array()?;
         if len != Some(8) {
-            return Err(minicbor::decode::Error::message(
+            return Err(pallas_codec::minicbor::decode::Error::message(
                 "TraceObject must have 8 fields",
             ));
         }
@@ -226,7 +226,7 @@ impl<'b> Decode<'b, ()> for TraceObject {
             match opt_len {
                 Some(0) => None,
                 Some(1) => Some(d.str()?.to_string()),
-                _ => return Err(minicbor::decode::Error::message("invalid Maybe encoding")),
+                _ => return Err(pallas_codec::minicbor::decode::Error::message("invalid Maybe encoding")),
             }
         };
 
@@ -235,7 +235,7 @@ impl<'b> Decode<'b, ()> for TraceObject {
 
         // toNamespace :: [Text]
         let ns_len = d.array()?.ok_or_else(|| {
-            minicbor::decode::Error::message("namespace must have definite length")
+            pallas_codec::minicbor::decode::Error::message("namespace must have definite length")
         })?;
         let mut to_namespace = Vec::with_capacity(ns_len as usize);
         for _ in 0..ns_len {
@@ -250,8 +250,8 @@ impl<'b> Decode<'b, ()> for TraceObject {
 
         // toTimestamp :: UTCTime
         let tag = d.tag()?;
-        if tag != minicbor::data::Tag::new(1) {
-            return Err(minicbor::decode::Error::message(
+        if tag != pallas_codec::minicbor::data::Tag::new(1) {
+            return Err(pallas_codec::minicbor::decode::Error::message(
                 "expected DateTime tag (tag 1)",
             ));
         }
@@ -259,7 +259,7 @@ impl<'b> Decode<'b, ()> for TraceObject {
         let secs = timestamp_f64.floor() as i64;
         let nanos = ((timestamp_f64 - secs as f64) * 1_000_000_000.0) as u32;
         let to_timestamp = DateTime::from_timestamp(secs, nanos)
-            .ok_or_else(|| minicbor::decode::Error::message("invalid timestamp"))?;
+            .ok_or_else(|| pallas_codec::minicbor::decode::Error::message("invalid timestamp"))?;
 
         // toHostname :: Text
         let to_hostname = d.str()?.to_string();
@@ -287,10 +287,10 @@ mod tests {
     #[test]
     fn test_severity_encoding() {
         let mut buf = Vec::new();
-        let mut encoder = minicbor::Encoder::new(&mut buf);
+        let mut encoder = pallas_codec::minicbor::Encoder::new(&mut buf);
         Severity::Info.encode(&mut encoder, &mut ()).unwrap();
 
-        let mut decoder = minicbor::Decoder::new(&buf);
+        let mut decoder = pallas_codec::minicbor::Decoder::new(&buf);
         let decoded = Severity::decode(&mut decoder, &mut ()).unwrap();
         assert_eq!(decoded, Severity::Info);
     }
@@ -298,10 +298,10 @@ mod tests {
     #[test]
     fn test_detail_level_encoding() {
         let mut buf = Vec::new();
-        let mut encoder = minicbor::Encoder::new(&mut buf);
+        let mut encoder = pallas_codec::minicbor::Encoder::new(&mut buf);
         DetailLevel::DNormal.encode(&mut encoder, &mut ()).unwrap();
 
-        let mut decoder = minicbor::Decoder::new(&buf);
+        let mut decoder = pallas_codec::minicbor::Decoder::new(&buf);
         let decoded = DetailLevel::decode(&mut decoder, &mut ()).unwrap();
         assert_eq!(decoded, DetailLevel::DNormal);
     }

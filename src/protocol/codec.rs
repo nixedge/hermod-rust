@@ -6,7 +6,7 @@
 use super::messages::*;
 use super::types::TraceObject;
 use bytes::{Buf, BufMut, BytesMut};
-use minicbor::{Decode, Decoder, Encode, Encoder};
+use pallas_codec::minicbor::{Decode, Decoder, Encode, Encoder};
 use thiserror::Error;
 use tokio_util::codec::{Decoder as TokioDecoder, Encoder as TokioEncoder};
 
@@ -30,17 +30,17 @@ pub enum CodecError {
     Protocol(String),
 }
 
-impl<T> From<minicbor::encode::Error<T>> for CodecError
+impl<T> From<pallas_codec::minicbor::encode::Error<T>> for CodecError
 where
     T: std::fmt::Display,
 {
-    fn from(e: minicbor::encode::Error<T>) -> Self {
+    fn from(e: pallas_codec::minicbor::encode::Error<T>) -> Self {
         CodecError::Encode(e.to_string())
     }
 }
 
-impl From<minicbor::decode::Error> for CodecError {
-    fn from(e: minicbor::decode::Error) -> Self {
+impl From<pallas_codec::minicbor::decode::Error> for CodecError {
+    fn from(e: pallas_codec::minicbor::decode::Error) -> Self {
         CodecError::Decode(e.to_string())
     }
 }

@@ -147,12 +147,17 @@ impl TraceForwarder {
         // Buffer for collecting traces to send
         let mut trace_buffer = Vec::new();
 
+        info!("Waiting for requests from acceptor...");
+
         loop {
             // Wait for a request from the acceptor
+            debug!("Awaiting next message...");
             let msg = framed
                 .next()
                 .await
                 .ok_or(ForwarderError::ConnectionClosed)??;
+
+            debug!("Received message: {:?}", msg);
 
             match msg {
                 Message::TraceObjectsRequest(req) => {

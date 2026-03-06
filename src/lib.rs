@@ -10,6 +10,7 @@
 #![warn(missing_docs)]
 
 pub mod forwarder;
+pub mod mux;
 pub mod protocol;
 pub mod tracer;
 
