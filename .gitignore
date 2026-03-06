@@ -1,0 +1,27 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# Nix
+result
+result-*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.direnv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Claude Code
+.claude/settings.local.json
+
+.direnv*
