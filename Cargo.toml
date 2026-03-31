@@ -3,7 +3,7 @@ name = "hermod"
 version = "0.1.0"
 edition = "2021"
 authors = ["IOHK"]
-description = "Rust implementation of hermod-tracer trace-forward protocol"
+description = "Rust tracer implementation of the Haskell hermod package"
 license = "Apache-2.0"
 
 [dependencies]

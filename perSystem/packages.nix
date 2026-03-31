@@ -40,7 +40,7 @@
       ];
 
       meta = {
-        description = "Rust implementation of hermod-tracer trace-forward protocol";
+        description = "Rust tracer implementation of the Haskell hermod package";
         license = lib.licenses.asl20;
       };
     };
@@ -51,7 +51,6 @@
     packages = {
       default = config.packages.hermod;
 
-      # Cardano tracer library
       hermod = craneLib.buildPackage (commonArgs
         // {
           inherit cargoArtifacts;
