@@ -67,40 +67,13 @@ Our implementation correctly implements the **trace-forward mini-protocol** but 
    - ✅ Send traces via mux protocol
    - ✅ Correctly decode trace requests (fixed Haskell Generic Serialise encoding)
 
-4. **Partial: End-to-End Testing**
+4. ✅ **End-to-End Testing**
    - ✅ Connection established and handshake successful
    - ✅ Trace requests correctly decoded (100 traces requested)
    - ✅ Trace objects sent successfully (3 traces sent)
-   - ✅ Cardano-tracer receives and processes messages without errors
+   - ✅ hermod-tracer receives and processes messages without errors
    - ✅ Protocol loop implemented correctly (handles multiple requests)
-   - ❌ Traces not appearing in log files (CBOR encoding investigation needed)
-
-### Known Issues
-
-**Traces Not Appearing in Logs**
-
-Despite successful protocol communication, traces aren't written to log files.
-
-**What Works:**
-- ✅ Protocol loop correctly implemented (waits for multiple requests)
-- ✅ Cardano-tracer accepts connections and recognizes node
-- ✅ Messages encode/decode successfully
-- ✅ No errors in hermod-tracer logs
-- ✅ Confirmed protocol numbers: Handshake=0, EKG=1, TraceObject=2, DataPoint=3
-
-**Investigation Findings:**
-1. **Protocol Loop**: Acceptor (hermod-tracer) continuously sends requests until `shouldWeStop`. Our implementation correctly handles this loop with timeout.
-2. **Handler Call**: `traceObjectsHandler` returns early if trace list is empty (line 37 of TraceObjects.hs). Since we're sending 3 traces, handler should be called.
-3. **Unregistered Protocol Warnings**: Pallas reports messages on protocols 32769 (0x8001) and 32771 (0x8003) - these are EKG and DataPoint with initiator flags.
-
-**Likely Cause:**
-Subtle CBOR encoding difference in TraceObject causing hermod-tracer to decode an empty list. The message structure is correct, but field-level encoding may differ.
-
-**Next Steps:**
-1. Compare CBOR bytes of Rust TraceObject with Haskell TraceObject
-2. Add wire-level debugging to see exact bytes sent/received
-3. Verify timestamp encoding (CBOR tag 1 with f64)
-4. Check Maybe/Option encoding for `to_human` field
+   - ✅ Traces appearing in log files (CBOR encoding fixed)
 
 ### Key Discovery: Haskell Generic Serialise Encoding
 
@@ -119,6 +92,14 @@ newtype NumberOfTraceObjects = NumberOfTraceObjects { nTraceObjects :: Word16 }
 
 This pattern applies to all Haskell newtypes with `deriving Generic` and `Serialise`.
 
+**Root Cause (traces not appearing)**: Three CBOR encoding bugs in `src/protocol/types.rs`:
+
+1. `TraceObject` was encoded as `array(8)[...]` but Haskell Generic Serialise requires `array(9)[0, ...]` (constructor index prefix)
+2. `Severity` was encoded as plain `u8(N)` but requires `array(1)[N]`
+3. `DetailLevel` same as Severity
+
+**Fix**: Added constructor index encoding to match Haskell's Generic Serialise derivation.
+
 ### Test Evidence
 
 ```bash
@@ -126,20 +107,31 @@ This pattern applies to all Haskell newtypes with `deriving Generic` and `Serial
 $ ~/work/iohk/cardano-node/scratch/result/bin/hermod-tracer --config /tmp/tracer-test-config.yaml
 {"ns":"Tracer.SockListen","data":{"kind":"TracerSockListen","listenAt":"/tmp/hermod-tracer.sock"},"sev":"Info"}
 
-# Rust client connects successfully
-$ cargo run --example test_with_tracer
-Connected!
+# Rust client connects and sends traces successfully
+$ RUST_LOG=info nix develop --command cargo run --example mux_test
+=== Hermod - Mux Integration Test ===
+Connecting to hermod-tracer at "/tmp/hermod-tracer.sock"...
+✓ Unix socket connected
+✓ Multiplexer started
+Performing trace-forward handshake...
+  Sent version proposal (ForwardingV_1)
+  ✓ Handshake accepted! ...
+✓ Trace-forward client ready
+...
+✓ Protocol loop completed successfully!
 
-# But no traces received (no mux handshake)
+# Traces appear in log files
 $ ls /tmp/hermod-tracer-test-logs/
-# Empty - no log files created
+rust-mux-test/
+$ cat /tmp/hermod-tracer-test-logs/rust-mux-test/*.log
+...trace content...
 ```
 
 ## Conclusion
 
-The trace-forward protocol implementation is **correct and wire-compatible**. Integration with hermod-tracer requires implementing the Ouroboros Network mux layer, which is a separate (and substantial) piece of infrastructure.
+The trace-forward protocol implementation is **correct and wire-compatible**. Integration with hermod-tracer works end-to-end via the Ouroboros Network mux layer (implemented using Pallas).
 
-The implementation as-is can serve as:
+The implementation serves as:
 1. A reference for the trace-forward mini-protocol
 2. A foundation for Rust-native tracing infrastructure
-3. A starting point for full Ouroboros Network integration
+3. A building block for `hermod::dispatcher` (full dispatcher compatibility)

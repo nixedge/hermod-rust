@@ -1,7 +1,7 @@
-//! High-level tracing integration for hermod-tracer
+//! High-level tracing integration for hermod
 //!
 //! This module provides integration with the Rust `tracing` ecosystem,
-//! allowing applications to forward their traces to hermod-tracer.
+//! allowing applications to forward their traces to hermod-tracer acceptors.
 
 use crate::forwarder::{ForwarderHandle, TraceForwarder};
 use crate::protocol::{DetailLevel, Severity, TraceObject};
@@ -68,7 +68,7 @@ impl TracerBuilder {
     }
 }
 
-/// Tracing layer that forwards traces to hermod-tracer
+/// Tracing layer that forwards traces to a hermod-tracer acceptor
 pub struct TraceForwarderLayer {
     handle: ForwarderHandle,
     hostname: Arc<String>,
@@ -131,7 +131,7 @@ where
     }
 }
 
-/// Helper to create a tracing subscriber with hermod-tracer forwarding
+/// Helper to create a tracing subscriber with hermod forwarding
 pub fn init_tracing_with_forwarder(
     forwarder: TraceForwarder,
 ) -> (impl tracing::Subscriber, tokio::task::JoinHandle<()>) {

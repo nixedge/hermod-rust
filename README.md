@@ -4,7 +4,7 @@ Rust implementation of the hermod-tracer trace-forward protocol. This library al
 
 ## Overview
 
-The trace-forward protocol enables distributed systems to send structured log messages (traces) to a centralized tracer service. This implementation maintains **full wire-protocol compatibility** with the existing Haskell implementation used in `cardano-node`, ensuring that Rust applications can seamlessly integrate with the existing benchmarking and monitoring infrastructure.
+The trace-forward protocol enables distributed systems to send structured log messages (traces) to a centralized tracer service. This implementation maintains **full wire-protocol compatibility** with the existing Haskell implementation used in `hermod-tracing`, ensuring that Rust applications can seamlessly integrate with the existing benchmarking and monitoring infrastructure.
 
 ## Features
 
@@ -153,7 +153,7 @@ This ensures Rust nodes can participate in the same monitoring infrastructure as
 
 - **Alternative Cardano implementations**: Enable Rust-based nodes to use hermod-tracer
 - **Tooling and utilities**: Index builders, chain analyzers, etc.
-- **Benchmarking**: Integrate with existing cardano-node benchmark infrastructure
+- **Benchmarking**: Integrate with existing hermod-tracing benchmark infrastructure
 - **Monitoring**: Unified observability across Haskell and Rust components
 
 ## License

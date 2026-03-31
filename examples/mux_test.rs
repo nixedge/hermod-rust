@@ -14,7 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    println!("=== Cardano Tracer Rust - Mux Integration Test ===\n");
+    println!("=== Hermod - Mux Integration Test ===\n");
 
     let socket_path = PathBuf::from("/tmp/hermod-tracer.sock");
     let network_magic = 764824073; // mainnet magic

@@ -1,7 +1,7 @@
-//! Cardano Tracer Rust - Trace-Forward Protocol Implementation
+//! hermod - Rust tracer implementation of the Haskell hermod package
 //!
-//! This library provides a Rust implementation of the hermod-tracer
-//! trace-forward protocol for sending traces to hermod-tracer acceptors.
+//! This library provides a Rust implementation of the trace-forward
+//! protocol for sending traces to hermod-tracer acceptors.
 //!
 //! The protocol enables Rust applications (like alternative Cardano nodes)
 //! to forward their traces to the standard hermod-tracer infrastructure

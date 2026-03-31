@@ -64,7 +64,7 @@ docs: add README with usage examples
 ## Wire Protocol Compatibility
 
 **CRITICAL**: The wire protocol MUST maintain byte-level compatibility with the
-Haskell implementation in cardano-node. Any changes to protocol types, encoding,
+Haskell implementation in hermod-tracing. Any changes to protocol types, encoding,
 or message format require verification against the Haskell reference.
 
 ### Testing Protocol Changes
