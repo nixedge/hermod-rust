@@ -139,12 +139,12 @@ rotation:
 #   scrape_configs:
 #     - job_name: cardano
 #       http_sd_configs:
-#         - url: http://127.0.0.1:12798/targets
+#         - url: http://127.0.0.1:9753/targets
 #           refresh_interval: 30s
 
 hasPrometheus:
   epHost: "127.0.0.1"
-  epPort: 12798
+  epPort: 9753
 
 # Extra labels added to every target in the /targets service-discovery response.
 # Useful for distinguishing between multiple hermod-tracer instances in a
