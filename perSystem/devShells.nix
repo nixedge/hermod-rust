@@ -32,6 +32,10 @@
 
           # Tree formatter
           config.treefmt.build.wrapper
+
+          # Haskell reference binaries (for conformance tests)
+          inputs'.hermod-tracing.packages.demo-acceptor
+          inputs'.hermod-tracing.packages.demo-forwarder
         ];
 
         shellHook = ''

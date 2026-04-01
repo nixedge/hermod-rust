@@ -17,6 +17,9 @@
       url = "github:disassembler/cardano-lsm-rust";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Haskell reference implementation (for conformance tests)
+    hermod-tracing.url = "path:/home/sam/work/iohk/hermod-tracing";
   };
 
   outputs = {
