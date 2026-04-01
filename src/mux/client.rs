@@ -11,12 +11,15 @@ use tracing::{debug, info};
 /// Errors that can occur in the mux client
 #[derive(Error, Debug)]
 pub enum ClientError {
+    /// Error from the underlying multiplexer
     #[error("multiplexer error: {0}")]
     Multiplexer(#[from] multiplexer::Error),
 
+    /// An unexpected message was received from the acceptor
     #[error("invalid inbound message")]
     InvalidInbound,
 
+    /// The connection was closed by the remote end
     #[error("connection closed")]
     ConnectionClosed,
 }

@@ -10,13 +10,16 @@ use thiserror::Error;
 /// Protocol version for trace-forward
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ForwardingVersion {
+    /// Version 1 of the forwarding protocol
     V1 = 1,
+    /// Version 2 of the forwarding protocol
     V2 = 2,
 }
 
 /// Version data containing network magic
 #[derive(Debug, Clone)]
 pub struct ForwardingVersionData {
+    /// The Cardano network magic number
     pub network_magic: u64,
 }
 
@@ -59,14 +62,18 @@ pub enum HandshakeMessage {
     Refuse(Vec<u64>),
 }
 
+/// Errors that can occur during handshake negotiation
 #[derive(Error, Debug)]
 pub enum HandshakeError {
+    /// CBOR codec error
     #[error("codec error: {0}")]
     Codec(String),
 
+    /// The remote peer refused all proposed versions
     #[error("version refused: {0:?}")]
     Refused(Vec<u64>),
 
+    /// No mutually acceptable protocol version could be found
     #[error("no compatible version")]
     NoCompatibleVersion,
 }
