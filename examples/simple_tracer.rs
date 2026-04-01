@@ -18,6 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         socket_path: PathBuf::from("/tmp/hermod-tracer.sock"),
         queue_size: 1000,
         max_reconnect_delay: 45,
+        network_magic: 764824073,
     };
 
     // Create the forwarder

@@ -69,10 +69,9 @@ impl Encode<()> for Message {
     ) -> Result<(), encode::Error<W::Error>> {
         match self {
             Message::TraceObjectsRequest(req) => {
-                e.array(3)?
-                    .u16(1)?
-                    .bool(req.blocking)?
-                    .u16(req.number_of_trace_objects)?;
+                // NumberOfTraceObjects is a Haskell newtype, encoded as [constructor_index, value]
+                e.array(3)?.u16(1)?.bool(req.blocking)?;
+                e.array(2)?.u16(0)?.u16(req.number_of_trace_objects)?;
             }
             Message::TraceObjectsReply(reply) => {
                 e.array(2)?.u16(3)?;

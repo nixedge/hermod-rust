@@ -19,8 +19,8 @@ tokio-util = { version = "0.7", features = ["codec"] }
 # Networking
 futures = "0.3"
 bytes = "1.7"
-pallas-network = "0.35.0"
-pallas-codec = "0.35.0"
+pallas-network = "=1.0.0-alpha.5"
+pallas-codec = "=1.0.0-alpha.5"
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }
@@ -47,3 +47,7 @@ tokio-test = "0.4"
 [lib]
 name = "hermod"
 path = "src/lib.rs"
+
+[[bin]]
+name = "hermod-acceptor"
+path = "src/bin/hermod-acceptor.rs"

@@ -3,9 +3,11 @@
 //! This module implements the trace-forward protocol as an Ouroboros Network
 //! mini-protocol using the pallas-network multiplexer infrastructure.
 
+mod acceptor_client;
 mod client;
 mod handshake;
 
+pub use acceptor_client::*;
 pub use client::*;
 pub use handshake::*;
 

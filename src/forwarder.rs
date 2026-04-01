@@ -1,19 +1,18 @@
 //! Trace forwarder client implementation
 //!
 //! This module implements the forwarder side of the trace-forward protocol,
-//! which connects to a hermod-tracer acceptor and sends trace objects.
+//! which connects to a hermod-tracer acceptor and sends trace objects via the
+//! Ouroboros Network multiplexer.
 
-use crate::protocol::{
-    codec::{CodecError, FramedTraceObjectCodec},
-    messages::{Message, MsgTraceObjectsReply},
-    TraceObject,
+use crate::mux::{
+    version_table_v1, HandshakeMessage, TraceForwardClient, PROTOCOL_DATA_POINT, PROTOCOL_EKG,
+    PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
 };
-use futures::{SinkExt, StreamExt};
+use crate::protocol::TraceObject;
+use pallas_network::multiplexer::{Bearer, ChannelBuffer, Plexer};
 use std::path::PathBuf;
 use thiserror::Error;
-use tokio::net::UnixStream;
 use tokio::sync::mpsc;
-use tokio_util::codec::Framed;
 use tracing::{debug, error, info, warn};
 
 /// Errors that can occur in the forwarder
@@ -23,9 +22,17 @@ pub enum ForwarderError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    /// Codec error
-    #[error("Codec error: {0}")]
-    Codec(#[from] CodecError),
+    /// Multiplexer error
+    #[error("Multiplexer error: {0}")]
+    Multiplexer(#[from] pallas_network::multiplexer::Error),
+
+    /// Handshake was refused by the acceptor
+    #[error("Handshake refused")]
+    HandshakeRefused,
+
+    /// Unexpected message during handshake
+    #[error("Unexpected handshake message")]
+    UnexpectedHandshake,
 
     /// Connection closed unexpectedly
     #[error("Connection closed unexpectedly")]
@@ -47,6 +54,9 @@ pub struct ForwarderConfig {
 
     /// Maximum reconnection delay in seconds
     pub max_reconnect_delay: u64,
+
+    /// Cardano network magic (must match the acceptor's)
+    pub network_magic: u64,
 }
 
 impl Default for ForwarderConfig {
@@ -55,6 +65,7 @@ impl Default for ForwarderConfig {
             socket_path: PathBuf::from("/tmp/hermod-tracer.sock"),
             queue_size: 1000,
             max_reconnect_delay: 45,
+            network_magic: 764824073,
         }
     }
 }
@@ -98,7 +109,6 @@ impl TraceForwarder {
     pub fn new(config: ForwarderConfig) -> Self {
         let (tx, rx) = mpsc::channel(config.queue_size);
         let handle = ForwarderHandle { tx };
-
         Self { config, rx, handle }
     }
 
@@ -107,7 +117,7 @@ impl TraceForwarder {
         self.handle.clone()
     }
 
-    /// Run the forwarder (connects and handles protocol)
+    /// Run the forwarder (connects and handles protocol, reconnecting on error)
     pub async fn run(mut self) -> Result<(), ForwarderError> {
         info!("Starting trace forwarder");
 
@@ -124,9 +134,7 @@ impl TraceForwarder {
                         "Forwarder error: {}, reconnecting in {}s",
                         e, reconnect_delay
                     );
-
                     tokio::time::sleep(tokio::time::Duration::from_secs(reconnect_delay)).await;
-
                     reconnect_delay = (reconnect_delay * 2).min(self.config.max_reconnect_delay);
                 }
             }
@@ -136,80 +144,70 @@ impl TraceForwarder {
     async fn connect_and_run(&mut self) -> Result<(), ForwarderError> {
         debug!("Connecting to {}", self.config.socket_path.display());
 
-        let stream = UnixStream::connect(&self.config.socket_path).await?;
+        debug!("Connecting to {}", self.config.socket_path.display());
+        let bearer = Bearer::connect_unix(&self.config.socket_path).await?;
         info!(
             "Connected to hermod-tracer at {}",
             self.config.socket_path.display()
         );
 
-        let mut framed = Framed::new(stream, FramedTraceObjectCodec::new());
+        let mut plexer = Plexer::new(bearer);
 
-        // Buffer for collecting traces to send
-        let mut trace_buffer = Vec::new();
+        let handshake_channel = plexer.subscribe_client(PROTOCOL_HANDSHAKE);
+        let trace_channel = plexer.subscribe_client(PROTOCOL_TRACE_OBJECT);
+        let _ekg_channel = plexer.subscribe_server(PROTOCOL_EKG);
+        let _datapoint_channel = plexer.subscribe_server(PROTOCOL_DATA_POINT);
 
-        info!("Waiting for requests from acceptor...");
+        let _plexer_handle = plexer.spawn();
+
+        // Perform handshake
+        let mut hs_buf = ChannelBuffer::new(handshake_channel);
+        let versions = version_table_v1(self.config.network_magic);
+        hs_buf
+            .send_msg_chunks(&HandshakeMessage::Propose(versions))
+            .await?;
+        let response: HandshakeMessage = hs_buf.recv_full_msg().await?;
+        match response {
+            HandshakeMessage::Accept(version, data) => {
+                info!(
+                    "Handshake accepted: version={}, magic={}",
+                    version, data.network_magic
+                );
+            }
+            HandshakeMessage::Refuse(_) => {
+                return Err(ForwarderError::HandshakeRefused);
+            }
+            _ => {
+                return Err(ForwarderError::UnexpectedHandshake);
+            }
+        }
+
+        let mut client = TraceForwardClient::new(trace_channel);
 
         loop {
-            // Wait for a request from the acceptor
-            debug!("Awaiting next message...");
-            let msg = framed
-                .next()
-                .await
-                .ok_or(ForwarderError::ConnectionClosed)??;
+            // Wait for at least one trace (blocking)
+            let first = match self.rx.recv().await {
+                Some(t) => t,
+                None => return Ok(()), // channel closed, shut down
+            };
 
-            debug!("Received message: {:?}", msg);
+            // Drain any additional pending traces
+            let mut traces = vec![first];
+            while let Ok(t) = self.rx.try_recv() {
+                traces.push(t);
+            }
 
-            match msg {
-                Message::TraceObjectsRequest(req) => {
-                    debug!(
-                        "Received request for {} traces (blocking: {})",
-                        req.number_of_trace_objects, req.blocking
-                    );
+            debug!("Sending {} traces to acceptor", traces.len());
 
-                    trace_buffer.clear();
-
-                    // Collect requested number of traces
-                    let mut count = 0;
-                    while count < req.number_of_trace_objects {
-                        if req.blocking && count == 0 {
-                            // Blocking request must wait for at least one trace
-                            match self.rx.recv().await {
-                                Some(trace) => {
-                                    trace_buffer.push(trace);
-                                    count += 1;
-                                }
-                                None => return Err(ForwarderError::ConnectionClosed),
-                            }
-                        } else {
-                            // Non-blocking or already have some traces
-                            match self.rx.try_recv() {
-                                Ok(trace) => {
-                                    trace_buffer.push(trace);
-                                    count += 1;
-                                }
-                                Err(mpsc::error::TryRecvError::Empty) => break,
-                                Err(mpsc::error::TryRecvError::Disconnected) => {
-                                    return Err(ForwarderError::ConnectionClosed);
-                                }
-                            }
-                        }
-                    }
-
-                    debug!("Sending {} traces", trace_buffer.len());
-
-                    // Send reply
-                    let reply = Message::TraceObjectsReply(MsgTraceObjectsReply {
-                        trace_objects: trace_buffer.clone(),
-                    });
-
-                    framed.send(reply).await?;
-                }
-                Message::Done => {
-                    info!("Received Done message, closing connection");
+            match client.handle_request(traces).await {
+                Ok(()) => {}
+                Err(crate::mux::ClientError::ConnectionClosed) => {
+                    info!("Acceptor sent Done, closing connection");
                     return Ok(());
                 }
-                _ => {
-                    warn!("Unexpected message from acceptor: {:?}", msg);
+                Err(e) => {
+                    warn!("Client error: {}", e);
+                    return Err(ForwarderError::ConnectionClosed);
                 }
             }
         }

@@ -9,6 +9,7 @@
 
 #![warn(missing_docs)]
 
+pub mod acceptor;
 pub mod dispatcher;
 pub mod forwarder;
 pub mod mux;
