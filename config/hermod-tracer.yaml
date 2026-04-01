@@ -177,7 +177,7 @@ metricsNoSuffix: false
 
 hasEKG:
   epHost: "127.0.0.1"
-  epPort: 12789
+  epPort: 9754
 
 ekgRequestFreq: 1.0
 ekgRequestFull: false
