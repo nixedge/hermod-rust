@@ -150,7 +150,7 @@ fn test_example_config_parses() {
         .join("config/hermod-tracer.yaml");
     let cfg = TracerConfig::from_file(&path)
         .expect("example config should parse");
-    assert_eq!(cfg.network_magic, 764824073);
+    assert_eq!(cfg.network_magic, 42);
     assert!(matches!(cfg.network, Network::AcceptAt(_)));
     assert!(!cfg.logging.is_empty());
     assert!(cfg.rotation.is_some());

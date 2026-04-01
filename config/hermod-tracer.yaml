@@ -15,22 +15,22 @@
 # ("AcceptAt"), or dials out to forwarder nodes ("ConnectTo").
 #
 # AcceptAt (passive / server role) — bind a socket and accept connections.
-#   This is the standard mode: cardano-node connects to hermod-tracer.
+#   This is the standard mode: the node connects to hermod-tracer.
 #
 # ConnectTo (active / client role) — dial out to one or more forwarder nodes.
 #   Use this when the forwarder nodes cannot accept inbound connections
 #   (e.g., behind NAT or a firewall).
 #
 # Addresses may be:
-#   - A Unix socket path:   "/tmp/cardano-node.sock"
+#   - A Unix socket path:   "/tmp/hermod.sock"
 #   - A TCP host:port pair: "127.0.0.1:3001"
 #
 # Examples:
 #
-#   AcceptAt a single Unix socket (default for local cardano-node):
+#   AcceptAt a single Unix socket:
 #     network:
 #       tag: AcceptAt
-#       contents: /tmp/cardano-node.sock
+#       contents: /tmp/hermod.sock
 #
 #   AcceptAt a TCP port:
 #     network:
@@ -43,7 +43,7 @@
 #       contents:
 #         - "192.168.1.10:3001"
 #         - "192.168.1.11:3001"
-#         - /tmp/local-node.sock
+#         - /tmp/hermod.sock
 
 network:
   tag: AcceptAt
@@ -51,7 +51,7 @@ network:
 
 # Cardano network magic number.
 # Mainnet = 764824073, Preview = 2, Preprod = 1, private testnet = any value.
-networkMagic: 764824073
+networkMagic: 42
 
 # ---------------------------------------------------------------------------
 # Trace request settings
@@ -86,12 +86,12 @@ loRequestNum: 100
 #   {"at":"2024-01-15T10:30:00.000Z","ns":["Cardano","Node","ChainSync"],...}
 
 logging:
-  - logRoot: /var/log/cardano
+  - logRoot: /tmp/hermod-logs
     logMode: FileMode
     logFormat: ForMachine
 
   # Uncomment to also write human-readable logs:
-  # - logRoot: /var/log/cardano-human
+  # - logRoot: /tmp/hermod-logs-human
   #   logMode: FileMode
   #   logFormat: ForHuman
 
@@ -130,14 +130,14 @@ rotation:
 #
 # The {slug} is derived from the node's connection address by lowercasing it
 # and replacing non-alphanumeric characters with hyphens:
-#   /tmp/cardano-node.sock  →  /tmp-cardano-node-sock
-#   127.0.0.1:3001          →  127-0-0-1-3001
+#   /tmp/hermod.sock   →  tmp-hermod-sock
+#   127.0.0.1:3001     →  127-0-0-1-3001
 #
 # Point your prometheus.yml scrape config at the /targets endpoint to
 # automatically discover all connected nodes:
 #
 #   scrape_configs:
-#     - job_name: cardano
+#     - job_name: hermod
 #       http_sd_configs:
 #         - url: http://127.0.0.1:9753/targets
 #           refresh_interval: 30s
@@ -147,11 +147,10 @@ hasPrometheus:
   epPort: 9753
 
 # Extra labels added to every target in the /targets service-discovery response.
-# Useful for distinguishing between multiple hermod-tracer instances in a
-# multi-datacenter setup.
-prometheusLabels:
-  env: mainnet
-  # datacenter: eu-west-1
+# Useful for distinguishing between multiple hermod-tracer instances.
+# prometheusLabels:
+#   env: mainnet
+#   datacenter: eu-west-1
 
 # Strip _total, _int, and _double suffixes from metric names in the Prometheus
 # output.  Set to true when feeding into a Grafana dashboard that expects the

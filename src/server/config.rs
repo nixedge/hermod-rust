@@ -263,35 +263,35 @@ mod tests {
     use super::*;
 
     const MINIMAL_YAML: &str = r#"
-networkMagic: 764824073
+networkMagic: 42
 network:
   tag: AcceptAt
-  contents: "/tmp/forwarder.sock"
+  contents: "/tmp/hermod.sock"
 logging:
-- logRoot: "/tmp/cardano-tracer-logs"
+- logRoot: "/tmp/hermod-logs"
   logMode: FileMode
   logFormat: ForMachine
 "#;
 
     const COMPLETE_YAML: &str = r#"
-networkMagic: 764824073
+networkMagic: 42
 network:
   tag: ConnectTo
   contents:
-  - "/tmp/forwarder.sock"
+  - "/tmp/hermod.sock"
 loRequestNum: 100
 ekgRequestFreq: 2
 hasEKG:
   epHost: 127.0.0.1
-  epPort: 3100
+  epPort: 9754
 hasPrometheus:
   epHost: 127.0.0.1
-  epPort: 3000
+  epPort: 9753
 logging:
-- logRoot: "/tmp/cardano-tracer-h-logs"
+- logRoot: "/tmp/hermod-logs-human"
   logMode: FileMode
   logFormat: ForHuman
-- logRoot: "/tmp/cardano-tracer-m-logs"
+- logRoot: "/tmp/hermod-logs"
   logMode: FileMode
   logFormat: ForMachine
 rotation:
@@ -305,10 +305,10 @@ verbosity: ErrorsOnly
     #[test]
     fn test_parse_minimal_yaml() {
         let cfg = TracerConfig::from_str(MINIMAL_YAML).unwrap();
-        assert_eq!(cfg.network_magic, 764824073);
+        assert_eq!(cfg.network_magic, 42);
         assert!(matches!(cfg.network, Network::AcceptAt(_)));
         if let Network::AcceptAt(addr) = &cfg.network {
-            assert_eq!(*addr, Address::LocalPipe("/tmp/forwarder.sock".into()));
+            assert_eq!(*addr, Address::LocalPipe("/tmp/hermod.sock".into()));
         }
         assert_eq!(cfg.logging.len(), 1);
         assert_eq!(cfg.logging[0].log_format, LogFormat::ForMachine);
@@ -319,11 +319,11 @@ verbosity: ErrorsOnly
     #[test]
     fn test_parse_complete_yaml() {
         let cfg = TracerConfig::from_str(COMPLETE_YAML).unwrap();
-        assert_eq!(cfg.network_magic, 764824073);
+        assert_eq!(cfg.network_magic, 42);
         assert!(matches!(cfg.network, Network::ConnectTo(_)));
         if let Network::ConnectTo(addrs) = &cfg.network {
             assert_eq!(addrs.len(), 1);
-            assert_eq!(addrs[0], Address::LocalPipe("/tmp/forwarder.sock".into()));
+            assert_eq!(addrs[0], Address::LocalPipe("/tmp/hermod.sock".into()));
         }
         assert_eq!(cfg.lo_request_num(), 100);
         assert!((cfg.ekg_request_freq() - 2.0).abs() < f64::EPSILON);
@@ -331,7 +331,7 @@ verbosity: ErrorsOnly
         assert!(cfg.has_prometheus.is_some());
         let prom = cfg.has_prometheus.as_ref().unwrap();
         assert_eq!(prom.ep_host, "127.0.0.1");
-        assert_eq!(prom.ep_port, 3000);
+        assert_eq!(prom.ep_port, 9753);
         assert_eq!(cfg.logging.len(), 2);
         assert_eq!(cfg.logging[0].log_format, LogFormat::ForHuman);
         assert_eq!(cfg.logging[1].log_format, LogFormat::ForMachine);
