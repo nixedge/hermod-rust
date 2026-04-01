@@ -7,9 +7,43 @@ use crate::forwarder::{ForwarderHandle, TraceForwarder};
 use crate::protocol::{DetailLevel, Severity, TraceObject};
 use chrono::Utc;
 use std::sync::Arc;
+use tracing::field::{Field, Visit};
 use tracing::Level;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::{Layer, Registry};
+
+/// Visitor that collects all tracing event fields into a JSON map.
+struct JsonVisitor(serde_json::Map<String, serde_json::Value>);
+
+impl JsonVisitor {
+    fn new() -> Self {
+        Self(serde_json::Map::new())
+    }
+}
+
+impl Visit for JsonVisitor {
+    fn record_f64(&mut self, field: &Field, value: f64) {
+        self.0.insert(field.name().to_string(), serde_json::json!(value));
+    }
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        self.0.insert(field.name().to_string(), serde_json::json!(value));
+    }
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        self.0.insert(field.name().to_string(), serde_json::json!(value));
+    }
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        self.0.insert(field.name().to_string(), serde_json::json!(value));
+    }
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.0.insert(field.name().to_string(), serde_json::json!(value));
+    }
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        self.0.insert(field.name().to_string(), serde_json::json!(format!("{value:?}")));
+    }
+    fn record_error(&mut self, field: &Field, value: &(dyn std::error::Error + 'static)) {
+        self.0.insert(field.name().to_string(), serde_json::json!(value.to_string()));
+    }
+}
 
 /// Builder for creating a trace forwarder with tracing integration
 pub struct TracerBuilder {
@@ -87,18 +121,19 @@ impl TraceForwarderLayer {
         }
     }
 
-    /// Extract namespace from span metadata
+    /// Build namespace from the event target.
+    ///
+    /// The target is split on `"::"` (Rust module paths) or `"."` (dot-separated
+    /// namespaces set via `target: "Foo.Bar"`). The configured prefix is prepended.
     fn extract_namespace(&self, meta: &tracing::Metadata<'_>) -> Vec<String> {
         let mut namespace = self.namespace_prefix.as_ref().clone();
-
-        // Add module path
-        if let Some(module) = meta.module_path() {
-            namespace.extend(module.split("::").map(|s| s.to_string()));
-        }
-
-        // Add span name
-        namespace.push(meta.name().to_string());
-
+        let target = meta.target();
+        let segments: Vec<String> = if target.contains("::") {
+            target.split("::").map(|s| s.to_string()).collect()
+        } else {
+            target.split('.').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
+        };
+        namespace.extend(segments);
         namespace
     }
 }
@@ -110,14 +145,23 @@ where
     fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
         let metadata = event.metadata();
 
-        // Build the trace object
+        // Collect all structured fields into a JSON map.
+        let mut visitor = JsonVisitor::new();
+        event.record(&mut visitor);
+
+        // The "message" field is the human-readable log line; extract it separately.
+        let human = visitor
+            .0
+            .get("message")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let to_machine = serde_json::to_string(&visitor.0)
+            .unwrap_or_else(|_| "{}".to_string());
+
         let trace_obj = TraceObject {
-            to_human: None, // Could be extracted from fields
-            to_machine: format!(
-                r#"{{"message": "{}", "target": "{}"}}"#,
-                metadata.name(),
-                metadata.target()
-            ),
+            to_human: human,
+            to_machine,
             to_namespace: self.extract_namespace(metadata),
             to_severity: Self::level_to_severity(metadata.level()),
             to_details: DetailLevel::DNormal,
