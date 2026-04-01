@@ -47,7 +47,7 @@
 
 network:
   tag: AcceptAt
-  contents: /tmp/cardano-node.sock
+  contents: /tmp/hermod.sock
 
 # Cardano network magic number.
 # Mainnet = 764824073, Preview = 2, Preprod = 1, private testnet = any value.
