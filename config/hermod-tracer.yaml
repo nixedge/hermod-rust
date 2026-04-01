@@ -1,0 +1,233 @@
+# hermod-tracer configuration
+#
+# This file is compatible with the Haskell `cardano-tracer` YAML format.
+# All field names use the same camelCase spelling as the Haskell implementation,
+# so existing cardano-tracer configs work without modification.
+#
+# Run with:
+#   hermod-tracer --config /path/to/hermod-tracer.yaml
+
+# ---------------------------------------------------------------------------
+# Network mode
+# ---------------------------------------------------------------------------
+#
+# Controls whether hermod-tracer listens for incoming forwarder connections
+# ("AcceptAt"), or dials out to forwarder nodes ("ConnectTo").
+#
+# AcceptAt (passive / server role) — bind a socket and accept connections.
+#   This is the standard mode: cardano-node connects to hermod-tracer.
+#
+# ConnectTo (active / client role) — dial out to one or more forwarder nodes.
+#   Use this when the forwarder nodes cannot accept inbound connections
+#   (e.g., behind NAT or a firewall).
+#
+# Addresses may be:
+#   - A Unix socket path:   "/tmp/cardano-node.sock"
+#   - A TCP host:port pair: "127.0.0.1:3001"
+#
+# Examples:
+#
+#   AcceptAt a single Unix socket (default for local cardano-node):
+#     network:
+#       tag: AcceptAt
+#       contents: /tmp/cardano-node.sock
+#
+#   AcceptAt a TCP port:
+#     network:
+#       tag: AcceptAt
+#       contents: "0.0.0.0:3001"
+#
+#   ConnectTo multiple nodes:
+#     network:
+#       tag: ConnectTo
+#       contents:
+#         - "192.168.1.10:3001"
+#         - "192.168.1.11:3001"
+#         - /tmp/local-node.sock
+
+network:
+  tag: AcceptAt
+  contents: /tmp/cardano-node.sock
+
+# Cardano network magic number.
+# Mainnet = 764824073, Preview = 2, Preprod = 1, private testnet = any value.
+networkMagic: 764824073
+
+# ---------------------------------------------------------------------------
+# Trace request settings
+# ---------------------------------------------------------------------------
+
+# Number of TraceObject messages to request per round-trip (default: 100).
+# Higher values increase throughput; lower values reduce latency.
+loRequestNum: 100
+
+# ---------------------------------------------------------------------------
+# File logging
+# ---------------------------------------------------------------------------
+#
+# One or more logging configurations.  Each entry writes to a separate
+# directory tree with a chosen format.  Having multiple entries lets you write
+# both human-readable and machine-readable logs simultaneously.
+#
+# Fields:
+#   logRoot   — directory under which per-node subdirectories are created.
+#   logMode   — FileMode (write to files) or JournalMode (systemd journal,
+#               not supported on this platform; entries are silently skipped).
+#   logFormat — ForHuman (plain text) or ForMachine (newline-delimited JSON).
+#
+# File layout:
+#   {logRoot}/{node-id}/node-{YYYY-MM-DDTHH-MM-SS}.{ext}   ← timestamped file
+#   {logRoot}/{node-id}/node.{ext}                          ← symlink → current
+#
+# Human format line:
+#   2024-01-15T10:30:00.000Z [Info] Cardano.Node.ChainSync connected to 1 peers
+#
+# Machine format line (newline-delimited JSON):
+#   {"at":"2024-01-15T10:30:00.000Z","ns":["Cardano","Node","ChainSync"],...}
+
+logging:
+  - logRoot: /var/log/cardano
+    logMode: FileMode
+    logFormat: ForMachine
+
+  # Uncomment to also write human-readable logs:
+  # - logRoot: /var/log/cardano-human
+  #   logMode: FileMode
+  #   logFormat: ForHuman
+
+# ---------------------------------------------------------------------------
+# Log rotation
+# ---------------------------------------------------------------------------
+#
+# Controls automatic rotation of log files.  Remove this section to disable
+# rotation entirely (files grow without bound).
+#
+# Fields:
+#   rpFrequencySecs — how often the rotation check runs (seconds).
+#   rpLogLimitBytes — rotate the current file when it reaches this size.
+#                     0 disables size-based rotation.
+#   rpMaxAgeHours   — delete timestamped files older than this many hours.
+#                     0 disables age-based deletion.
+#   rpKeepFilesNum  — always keep at most this many timestamped files per node,
+#                     regardless of age.  Newest files are kept.
+
+rotation:
+  rpFrequencySecs: 60
+  rpLogLimitBytes: 104857600   # 100 MiB
+  rpMaxAgeHours: 24
+  rpKeepFilesNum: 10
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics
+# ---------------------------------------------------------------------------
+#
+# Expose per-node Prometheus metrics over HTTP.
+#
+# Routes:
+#   GET /           — HTML listing of connected nodes (JSON with Accept: application/json)
+#   GET /targets    — Prometheus HTTP service-discovery JSON
+#   GET /{slug}     — per-node metrics in Prometheus text exposition format
+#
+# The {slug} is derived from the node's connection address by lowercasing it
+# and replacing non-alphanumeric characters with hyphens:
+#   /tmp/cardano-node.sock  →  /tmp-cardano-node-sock
+#   127.0.0.1:3001          →  127-0-0-1-3001
+#
+# Point your prometheus.yml scrape config at the /targets endpoint to
+# automatically discover all connected nodes:
+#
+#   scrape_configs:
+#     - job_name: cardano
+#       http_sd_configs:
+#         - url: http://127.0.0.1:12798/targets
+#           refresh_interval: 30s
+
+hasPrometheus:
+  epHost: "127.0.0.1"
+  epPort: 12798
+
+# Extra labels added to every target in the /targets service-discovery response.
+# Useful for distinguishing between multiple hermod-tracer instances in a
+# multi-datacenter setup.
+prometheusLabels:
+  env: mainnet
+  # datacenter: eu-west-1
+
+# Strip _total, _int, and _double suffixes from metric names in the Prometheus
+# output.  Set to true when feeding into a Grafana dashboard that expects the
+# original Haskell metric names without these suffixes.
+metricsNoSuffix: false
+
+# ---------------------------------------------------------------------------
+# EKG metrics (protocol 1)
+# ---------------------------------------------------------------------------
+#
+# If present, hermod-tracer polls each connected forwarder for EKG metrics and
+# populates the node's Prometheus registry so they appear in /slug output.
+#
+# Fields:
+#   epHost / epPort — address of the EKG HTTP endpoint (informational only;
+#                     hermod-tracer drives EKG via the mux channel, not HTTP).
+#
+# ekgRequestFreq   — how often to poll each node for updated metrics (seconds).
+#                    Default: 1.0.
+# ekgRequestFull   — if true, always request the full metric snapshot; if false
+#                    (default) request only metrics that changed since the last
+#                    poll.  Use true if metrics appear to go missing.
+
+hasEKG:
+  epHost: "127.0.0.1"
+  epPort: 12789
+
+ekgRequestFreq: 1.0
+ekgRequestFull: false
+
+# ---------------------------------------------------------------------------
+# Re-forwarding
+# ---------------------------------------------------------------------------
+#
+# If present, hermod-tracer relays received traces to a downstream acceptor
+# (another hermod-tracer instance, or the original cardano-tracer).
+# This lets you fan-out a single forwarder to multiple consumers.
+#
+# The value is a 3-element YAML sequence:
+#   [network, namespace_filters, forwarder_options]
+#
+# network          — where to connect/listen for the downstream acceptor;
+#                    same format as the top-level `network` key.
+# namespace_filters — optional list of namespace prefixes; only traces whose
+#                    namespace starts with one of these prefixes are forwarded.
+#                    null (or omit) to forward all traces.
+# forwarder_options — currently unused; set to null.
+#
+# Example — forward everything to a downstream aggregator on port 3100:
+#
+# hasForwarding:
+#   - tag: ConnectTo
+#     contents:
+#       - "aggregator.example.com:3100"
+#   - null
+#   - null
+#
+# Example — forward only ChainSync and Mempool traces:
+#
+# hasForwarding:
+#   - tag: ConnectTo
+#     contents:
+#       - "127.0.0.1:3100"
+#   - - [Cardano, Node, ChainSync]
+#     - [Cardano, Node, Mempool]
+#   - null
+
+# hasForwarding: null
+
+# ---------------------------------------------------------------------------
+# Verbosity
+# ---------------------------------------------------------------------------
+#
+# Controls how much detail hermod-tracer logs about its own operation.
+#   Minimum    — log nothing
+#   ErrorsOnly — log errors only
+#   Maximum    — verbose debug output
+
+verbosity: ErrorsOnly

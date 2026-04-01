@@ -10,7 +10,7 @@ use pallas_codec::minicbor::{decode, encode, Decode, Decoder, Encode, Encoder};
 
 /// Request for trace objects from the acceptor
 ///
-/// Wire format: `[3] [1] [blocking: bool] [count: u16]`
+/// Wire format: `array(3)[1, blocking: bool, array(2)[0, count: u16]]`
 #[derive(Debug, Clone)]
 pub struct MsgTraceObjectsRequest {
     /// Whether this is a blocking request
@@ -21,7 +21,7 @@ pub struct MsgTraceObjectsRequest {
 
 /// Reply with trace objects from the forwarder
 ///
-/// Wire format: `[2] [3] [trace_objects: [TraceObject]]`
+/// Wire format: `array(2)[3, trace_objects: [TraceObject]]`
 ///
 /// Note: For blocking requests, the list must be non-empty
 #[derive(Debug, Clone)]
@@ -33,7 +33,7 @@ pub struct MsgTraceObjectsReply {
 
 /// Termination message from acceptor
 ///
-/// Wire format: `[1] [2]`
+/// Wire format: `array(1)[2]`
 #[derive(Debug, Clone, Copy)]
 pub struct MsgDone;
 
@@ -97,15 +97,11 @@ impl<'b> Decode<'b, ()> for Message {
             1 => {
                 // MsgTraceObjectsRequest
                 let blocking = d.bool()?;
-                // NumberOfTraceObjects newtype with Generic Serialise is encoded as [constructor_index, Word16]
-                let arr_len = d.array()?;
-                tracing::debug!("Array length for NumberOfTraceObjects: {:?}", arr_len);
-                // Skip the constructor index (always 0 for newtypes)
+                // NumberOfTraceObjects is a Haskell newtype; Generic Serialise encodes it as
+                // array(2)[constructor_index=0, value]
+                d.array()?;
                 let _constructor_idx = d.u16()?;
-                tracing::debug!("Constructor index: {}", _constructor_idx);
-                // Now read the actual value
                 let number_of_trace_objects = d.u16()?;
-                tracing::debug!("Decoded count: {}", number_of_trace_objects);
                 Ok(Message::TraceObjectsRequest(MsgTraceObjectsRequest {
                     blocking,
                     number_of_trace_objects,
@@ -117,12 +113,10 @@ impl<'b> Decode<'b, ()> for Message {
             }
             3 => {
                 // MsgTraceObjectsReply
-                let len = d
-                    .array()?
-                    .ok_or_else(|| decode::Error::message("expected definite array"))?;
-                let mut trace_objects = Vec::with_capacity(len as usize);
-                for _ in 0..len {
-                    trace_objects.push(d.decode_with(ctx)?);
+                // Haskell's Serialise [a] uses indefinite-length encoding for non-empty lists
+                let mut trace_objects = Vec::new();
+                for item in d.array_iter_with::<(), TraceObject>(ctx)? {
+                    trace_objects.push(item?);
                 }
                 Ok(Message::TraceObjectsReply(MsgTraceObjectsReply {
                     trace_objects,

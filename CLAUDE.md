@@ -28,8 +28,10 @@ Use conventional commits format for all commits:
 
 **Scope:**
 - `protocol`: Protocol types and messages
-- `codec`: CBOR encoding/decoding
+- `mux`: Ouroboros Network mux layer
 - `forwarder`: Forwarder client
+- `acceptor`: Acceptor listener
+- `dispatcher`: Trace dispatcher/router
 - `tracer`: Tracing integration
 - `nix`: Nix flake/build configuration
 - `docs`: Documentation
@@ -91,17 +93,34 @@ hermod/
 ├── flake/
 │   └── lib.nix            # Flake utilities
 ├── perSystem/
-│   ├── devShells.nix      # Development environment
+│   ├── devShells.nix      # Development environment (includes hermod-tracing binaries)
 │   ├── formatter.nix      # Code formatting
 │   └── packages.nix       # Package definitions
 ├── src/
 │   ├── lib.rs             # Library entry point
+│   ├── bin/
+│   │   └── hermod-acceptor.rs  # Standalone acceptor binary
 │   ├── protocol/          # Wire protocol implementation
+│   │   ├── mod.rs         # Module re-exports
 │   │   ├── types.rs       # TraceObject, Severity, DetailLevel
-│   │   ├── messages.rs    # Protocol messages
-│   │   └── codec.rs       # CBOR encoding/decoding
+│   │   └── messages.rs    # Protocol messages + CBOR encode/decode
+│   ├── mux/               # Ouroboros Network mux layer
+│   │   ├── mod.rs
+│   │   ├── handshake.rs   # Handshake message types
+│   │   ├── client.rs      # Forwarder-side mux client
+│   │   └── acceptor_client.rs  # Acceptor-side mux client
+│   ├── acceptor.rs        # Trace acceptor (listener side)
+│   ├── dispatcher/        # Trace routing and filtering
+│   │   ├── mod.rs
+│   │   ├── config.rs      # YAML configuration
+│   │   ├── traits.rs      # Backend trait
+│   │   ├── limiter.rs     # Rate limiting
+│   │   └── backend/       # Output backends (stdout, forwarder, ekg, datapoint)
 │   ├── forwarder.rs       # Forwarder client
-│   └── tracer.rs          # Tracing integration
+│   └── tracer.rs          # Tracing subscriber integration
+├── tests/
+│   ├── forwarder_integration.rs  # Rust forwarder ↔ acceptor integration tests
+│   └── conformance.rs     # Cross-language conformance tests (requires hermod-tracing)
 └── examples/
     └── simple_tracer.rs   # Usage example
 ```

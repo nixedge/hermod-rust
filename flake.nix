@@ -1,5 +1,5 @@
 {
-  description = "Hayate (疾風) - Swift Cardano full node indexer";
+  description = "hermod — Rust implementation of the trace-forward protocol for Cardano";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
@@ -11,12 +11,6 @@
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
-
-    # Local cardano-lsm dependency
-    cardano-lsm = {
-      url = "github:disassembler/cardano-lsm-rust";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
 
     # Haskell reference implementation (for conformance tests)
     hermod-tracing.url = "path:/home/sam/work/iohk/hermod-tracing";

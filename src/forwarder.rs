@@ -143,8 +143,6 @@ impl TraceForwarder {
 
     async fn connect_and_run(&mut self) -> Result<(), ForwarderError> {
         debug!("Connecting to {}", self.config.socket_path.display());
-
-        debug!("Connecting to {}", self.config.socket_path.display());
         let bearer = Bearer::connect_unix(&self.config.socket_path).await?;
         info!(
             "Connected to hermod-tracer at {}",

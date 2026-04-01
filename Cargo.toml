@@ -1,8 +1,8 @@
 [package]
 name = "hermod"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
-authors = ["IOHK"]
+authors = ["Samuel Leathers <samuel.leathers@iohk.io>"]
 description = "Rust tracer implementation of the Haskell hermod package"
 license = "Apache-2.0"
 
@@ -10,15 +10,11 @@ license = "Apache-2.0"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_cbor = "0.11"
 
 # Async runtime
 tokio = { version = "1.40", features = ["full"] }
-tokio-util = { version = "0.7", features = ["codec"] }
 
 # Networking
-futures = "0.3"
-bytes = "1.7"
 pallas-network = "=1.0.0-alpha.5"
 pallas-codec = "=1.0.0-alpha.5"
 
@@ -41,8 +37,16 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # Hostname
 hostname = "0.4"
 
+# HTTP server (Prometheus endpoint)
+axum = "0.7"
+tower = "0.4"
+
+# Ordered maps (TracerState node list)
+indexmap = "2"
+
+# Temp files for tests
 [dev-dependencies]
-tokio-test = "0.4"
+tempfile = "3"
 
 [lib]
 name = "hermod"
@@ -51,3 +55,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "hermod-acceptor"
 path = "src/bin/hermod-acceptor.rs"
+
+[[bin]]
+name = "hermod-tracer"
+path = "src/bin/hermod-tracer.rs"
