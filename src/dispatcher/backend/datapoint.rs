@@ -174,16 +174,28 @@ mod tests {
     async fn with_store_single_segment_namespace() {
         let store = DataPointStore::new();
         let backend = DatapointBackend::with_store(store.clone());
-        backend.dispatch(&make_msg(vec!["NodeInfo"], r#"{"niName":"n1"}"#)).await.unwrap();
-        assert_eq!(store.get("NodeInfo"), Some(r#"{"niName":"n1"}"#.as_bytes().to_vec()));
+        backend
+            .dispatch(&make_msg(vec!["NodeInfo"], r#"{"niName":"n1"}"#))
+            .await
+            .unwrap();
+        assert_eq!(
+            store.get("NodeInfo"),
+            Some(r#"{"niName":"n1"}"#.as_bytes().to_vec())
+        );
     }
 
     #[tokio::test]
     async fn with_store_overwrites_previous_value() {
         let store = DataPointStore::new();
         let backend = DatapointBackend::with_store(store.clone());
-        backend.dispatch(&make_msg(vec!["A"], r#"{"v":1}"#)).await.unwrap();
-        backend.dispatch(&make_msg(vec!["A"], r#"{"v":2}"#)).await.unwrap();
+        backend
+            .dispatch(&make_msg(vec!["A"], r#"{"v":1}"#))
+            .await
+            .unwrap();
+        backend
+            .dispatch(&make_msg(vec!["A"], r#"{"v":2}"#))
+            .await
+            .unwrap();
         assert_eq!(store.get("A"), Some(r#"{"v":2}"#.as_bytes().to_vec()));
     }
 }

@@ -13,8 +13,8 @@
 
 use crate::forwarder::ForwarderHandle;
 use crate::mux::{
-    version_table_v1, ForwardingVersionData, HandshakeMessage, TraceForwardClient,
-    PROTOCOL_DATA_POINT, PROTOCOL_EKG, PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+    ForwardingVersionData, HandshakeMessage, PROTOCOL_DATA_POINT, PROTOCOL_EKG, PROTOCOL_HANDSHAKE,
+    PROTOCOL_TRACE_OBJECT, TraceForwardClient, version_table_v1,
 };
 use crate::protocol::TraceObject;
 use crate::server::config::Address;
@@ -333,10 +333,7 @@ mod tests {
         rf.forward(&traces).await;
         let received = rx.recv().await.unwrap();
         assert_eq!(received.len(), 1);
-        assert_eq!(
-            received[0].to_namespace,
-            vec!["Cardano", "Node", "Peers"]
-        );
+        assert_eq!(received[0].to_namespace, vec!["Cardano", "Node", "Peers"]);
     }
 
     #[tokio::test]
@@ -363,10 +360,7 @@ mod tests {
     #[tokio::test]
     async fn multiple_prefixes_any_match_passes() {
         let (tx, mut rx) = broadcast::channel(16);
-        let filters = Some(vec![
-            vec!["Cardano".to_string()],
-            vec!["Node".to_string()],
-        ]);
+        let filters = Some(vec![vec!["Cardano".to_string()], vec!["Node".to_string()]]);
         let rf = ReForwarder::new_inbound(tx, filters);
         let traces = vec![
             make_trace(vec!["Cardano", "X"]),

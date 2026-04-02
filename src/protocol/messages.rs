@@ -6,7 +6,7 @@
 //! - MsgDone: Acceptor terminates the session
 
 use super::types::TraceObject;
-use pallas_codec::minicbor::{decode, encode, Decode, Decoder, Encode, Encoder};
+use pallas_codec::minicbor::{Decode, Decoder, Encode, Encoder, decode, encode};
 
 /// Request for trace objects from the acceptor
 ///

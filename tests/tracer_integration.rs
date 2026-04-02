@@ -5,9 +5,9 @@
 //! and contains all 10 trace entries.
 
 use hermod::forwarder::{ForwarderAddress, ForwarderConfig, TraceForwarder};
-use hermod::protocol::types::{DetailLevel, Severity};
 use hermod::protocol::TraceObject;
-use hermod::server::{config::*, TracerServer};
+use hermod::protocol::types::{DetailLevel, Severity};
+use hermod::server::{TracerServer, config::*};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time::sleep;

@@ -6,8 +6,8 @@
 
 use crate::dispatcher::backend::datapoint::DataPointStore;
 use crate::mux::{
-    version_table_v1, HandshakeMessage, TraceForwardClient, PROTOCOL_DATA_POINT, PROTOCOL_EKG,
-    PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+    HandshakeMessage, PROTOCOL_DATA_POINT, PROTOCOL_EKG, PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+    TraceForwardClient, version_table_v1,
 };
 use crate::protocol::TraceObject;
 use crate::server::datapoint::DataPointMessage;

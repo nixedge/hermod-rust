@@ -355,18 +355,24 @@ TraceOptions:
 
         // Global default
         let global = cfg.options.get(&vec![] as &Vec<String>).unwrap();
-        assert!(global
-            .iter()
-            .any(|o| matches!(o, ConfigOption::Severity(_))));
-        assert!(global
-            .iter()
-            .any(|o| matches!(o, ConfigOption::Backends(_))));
+        assert!(
+            global
+                .iter()
+                .any(|o| matches!(o, ConfigOption::Severity(_)))
+        );
+        assert!(
+            global
+                .iter()
+                .any(|o| matches!(o, ConfigOption::Backends(_)))
+        );
 
         // ChainDB severity
         let chaindb = cfg.options.get(&vec!["ChainDB".to_string()]).unwrap();
-        assert!(chaindb
-            .iter()
-            .any(|o| matches!(o, ConfigOption::Severity(SeverityF(Some(Severity::Info))))));
+        assert!(
+            chaindb
+                .iter()
+                .any(|o| matches!(o, ConfigOption::Severity(SeverityF(Some(Severity::Info)))))
+        );
 
         // Rate limiter
         let limiter_key = vec![
@@ -375,9 +381,11 @@ TraceOptions:
             "AddedBlockToQueue".to_string(),
         ];
         let limiter_opts = cfg.options.get(&limiter_key).unwrap();
-        assert!(limiter_opts
-            .iter()
-            .any(|o| matches!(o, ConfigOption::Limiter(_))));
+        assert!(
+            limiter_opts
+                .iter()
+                .any(|o| matches!(o, ConfigOption::Limiter(_)))
+        );
     }
 
     #[test]

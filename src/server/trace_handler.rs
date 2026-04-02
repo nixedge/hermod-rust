@@ -13,8 +13,8 @@
 //! 3. **Re-forwarding** — if a [`ReForwarder`] is configured, passes the
 //!    (optionally namespace-filtered) batch on to the downstream forwarder.
 
-use crate::protocol::types::Severity;
 use crate::protocol::TraceObject;
+use crate::protocol::types::Severity;
 use crate::server::config::LogMode;
 use crate::server::logging::LogWriter;
 use crate::server::node::NodeState;

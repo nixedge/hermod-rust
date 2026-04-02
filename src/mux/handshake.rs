@@ -3,7 +3,7 @@
 //! Implements the handshake for the trace-forward protocol, which negotiates
 //! the protocol version (ForwardingV_1) and network magic.
 
-use pallas_codec::minicbor::{decode, encode, Decode, Decoder, Encode, Encoder};
+use pallas_codec::minicbor::{Decode, Decoder, Encode, Encoder, decode, encode};
 use std::collections::HashMap;
 
 /// Version data containing network magic

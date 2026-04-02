@@ -143,7 +143,7 @@ fn decode_reply_item(
         _ => {
             return Err(minicbor::decode::Error::message(
                 "invalid Maybe encoding in DataPointsReply",
-            ))
+            ));
         }
     };
 

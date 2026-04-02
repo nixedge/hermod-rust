@@ -258,24 +258,24 @@ logging:
     #[tokio::test]
     async fn node_list_returns_name_and_slug_pairs() {
         let state = TracerState::new(make_config());
-        state
-            .register("n1".to_string(), "Alpha".to_string())
-            .await;
-        state
-            .register("n2".to_string(), "Beta".to_string())
-            .await;
+        state.register("n1".to_string(), "Alpha".to_string()).await;
+        state.register("n2".to_string(), "Beta".to_string()).await;
         let list = state.node_list().await;
         assert_eq!(list.len(), 2);
-        assert!(list.iter().any(|(name, slug)| name == "Alpha" && slug == "alpha"));
-        assert!(list.iter().any(|(name, slug)| name == "Beta" && slug == "beta"));
+        assert!(
+            list.iter()
+                .any(|(name, slug)| name == "Alpha" && slug == "alpha")
+        );
+        assert!(
+            list.iter()
+                .any(|(name, slug)| name == "Beta" && slug == "beta")
+        );
     }
 
     #[tokio::test]
     async fn all_nodes_returns_arc_node_states() {
         let state = TracerState::new(make_config());
-        state
-            .register("n1".to_string(), "One".to_string())
-            .await;
+        state.register("n1".to_string(), "One".to_string()).await;
         let all = state.all_nodes().await;
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].name, "One");
@@ -284,12 +284,8 @@ logging:
     #[tokio::test]
     async fn register_overwrites_existing_node_with_same_id() {
         let state = TracerState::new(make_config());
-        state
-            .register("n1".to_string(), "First".to_string())
-            .await;
-        state
-            .register("n1".to_string(), "Second".to_string())
-            .await;
+        state.register("n1".to_string(), "First".to_string()).await;
+        state.register("n1".to_string(), "Second".to_string()).await;
         let list = state.node_list().await;
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].0, "Second");

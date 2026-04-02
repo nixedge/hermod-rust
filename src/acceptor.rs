@@ -5,8 +5,8 @@
 //! an async channel.
 
 use crate::mux::{
-    version_table_v1, ForwardingVersionData, HandshakeMessage, TraceAcceptorClient,
-    PROTOCOL_DATA_POINT, PROTOCOL_EKG, PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+    ForwardingVersionData, HandshakeMessage, PROTOCOL_DATA_POINT, PROTOCOL_EKG, PROTOCOL_HANDSHAKE,
+    PROTOCOL_TRACE_OBJECT, TraceAcceptorClient, version_table_v1,
 };
 use crate::protocol::TraceObject;
 use pallas_network::multiplexer::{Bearer, ChannelBuffer, Plexer};

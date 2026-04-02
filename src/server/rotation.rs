@@ -202,7 +202,10 @@ mod tests {
         write_file(tmp.path(), "node-2024-01-02T00-00-00.log");
         // keep 1 timestamped file; node.log is always preserved
         prune_old_files(&tmp.path().to_path_buf(), "log", 0, 1).unwrap();
-        assert!(tmp.path().join("node.log").exists(), "node.log must survive");
+        assert!(
+            tmp.path().join("node.log").exists(),
+            "node.log must survive"
+        );
         // node.log + 1 timestamped = 2 files total
         assert!(fs::read_dir(tmp.path()).unwrap().count() <= 2);
     }

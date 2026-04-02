@@ -6,7 +6,7 @@
 //! The config file must be a Haskell-compatible cardano-tracer YAML config.
 
 use anyhow::{Context, Result};
-use hermod::server::{config::TracerConfig, TracerServer};
+use hermod::server::{TracerServer, config::TracerConfig};
 use std::path::PathBuf;
 use tracing::info;
 

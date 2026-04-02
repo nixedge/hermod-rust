@@ -7,8 +7,8 @@ use crate::forwarder::{ForwarderHandle, TraceForwarder};
 use crate::protocol::{DetailLevel, Severity, TraceObject};
 use chrono::Utc;
 use std::sync::Arc;
-use tracing::field::{Field, Visit};
 use tracing::Level;
+use tracing::field::{Field, Visit};
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::{Layer, Registry};
 

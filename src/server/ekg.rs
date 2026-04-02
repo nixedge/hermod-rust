@@ -35,7 +35,7 @@
 //! library itself does not yet forward distributions.
 
 use crate::server::node::NodeState;
-use pallas_codec::minicbor::{self, data::Type, Decode, Decoder, Encode, Encoder};
+use pallas_codec::minicbor::{self, Decode, Decoder, Encode, Encoder, data::Type};
 use pallas_network::multiplexer::{ChannelBuffer, Error};
 use prometheus::{GaugeVec, IntCounterVec, Opts, Registry};
 use std::collections::HashMap;
@@ -434,13 +434,19 @@ mod tests {
     #[test]
     fn ekg_value_counter_round_trip() {
         let v = EkgValue::Counter(-42);
-        assert!(matches!(decode::<EkgValue>(&encode(&v)), EkgValue::Counter(-42)));
+        assert!(matches!(
+            decode::<EkgValue>(&encode(&v)),
+            EkgValue::Counter(-42)
+        ));
     }
 
     #[test]
     fn ekg_value_gauge_round_trip() {
         let v = EkgValue::Gauge(100);
-        assert!(matches!(decode::<EkgValue>(&encode(&v)), EkgValue::Gauge(100)));
+        assert!(matches!(
+            decode::<EkgValue>(&encode(&v)),
+            EkgValue::Gauge(100)
+        ));
     }
 
     #[test]
@@ -511,7 +517,16 @@ mod tests {
     fn update_metric_gauge_sets_value() {
         let registry = Registry::new();
         let (gc, lgc, cc, cv) = empty_caches();
-        update_metric(&registry, "my_gauge", &EkgValue::Gauge(42), &gc, &lgc, &cc, &cv).unwrap();
+        update_metric(
+            &registry,
+            "my_gauge",
+            &EkgValue::Gauge(42),
+            &gc,
+            &lgc,
+            &cc,
+            &cv,
+        )
+        .unwrap();
         let families = registry.gather();
         assert_eq!(families.len(), 1);
         assert_eq!(families[0].get_name(), "my_gauge");

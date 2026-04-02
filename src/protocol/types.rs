@@ -248,7 +248,7 @@ impl<'b> Decode<'b, ()> for TraceObject {
                 _ => {
                     return Err(pallas_codec::minicbor::decode::Error::message(
                         "invalid Maybe encoding",
-                    ))
+                    ));
                 }
             }
         };
@@ -412,8 +412,7 @@ mod tests {
             to_namespace: vec!["Cardano".to_string(), "Node".to_string()],
             to_severity: Severity::Warning,
             to_details: DetailLevel::DDetailed,
-            to_timestamp: chrono::DateTime::from_timestamp(1_700_000_000, 500_000_000)
-                .unwrap(),
+            to_timestamp: chrono::DateTime::from_timestamp(1_700_000_000, 500_000_000).unwrap(),
             to_hostname: "node-1".to_string(),
             to_thread_id: "99".to_string(),
         }
@@ -494,7 +493,10 @@ mod tests {
         enc.str("99").unwrap();
 
         let decoded = decode::<TraceObject>(&buf);
-        assert_eq!(decoded.to_timestamp.timestamp(), original.to_timestamp.timestamp());
+        assert_eq!(
+            decoded.to_timestamp.timestamp(),
+            original.to_timestamp.timestamp()
+        );
         // Discard the `normal_buf` usage warning
         let _ = normal_buf;
     }

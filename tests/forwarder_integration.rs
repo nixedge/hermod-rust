@@ -6,7 +6,7 @@ use hermod::forwarder::{ForwarderAddress, ForwarderConfig, TraceForwarder};
 use hermod::protocol::{DetailLevel, Severity, TraceObject};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 fn test_socket() -> PathBuf {
     static COUNTER: AtomicU64 = AtomicU64::new(0);

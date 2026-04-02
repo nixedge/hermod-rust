@@ -22,14 +22,14 @@
 use crate::server::config::Endpoint;
 use crate::server::node::TracerState;
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Response},
     routing::get,
-    Json, Router,
 };
 use prometheus::Encoder;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;

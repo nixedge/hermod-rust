@@ -16,7 +16,7 @@ use hermod::forwarder::{ForwarderAddress, ForwarderConfig, TraceForwarder};
 use hermod::protocol::{DetailLevel, Severity, TraceObject};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,11 +39,7 @@ fn test_socket() -> PathBuf {
 fn find_binary(name: &str) -> Option<PathBuf> {
     std::env::var("PATH").ok()?.split(':').find_map(|dir| {
         let path = Path::new(dir).join(name);
-        if path.is_file() {
-            Some(path)
-        } else {
-            None
-        }
+        if path.is_file() { Some(path) } else { None }
     })
 }
 
@@ -820,8 +816,8 @@ fn test_timestamp_uses_tag_1000() {
 #[tokio::test]
 async fn test_haskell_forwarder_datapoint_round_trip() {
     use hermod::mux::{
-        version_table_v1, ForwardingVersionData, HandshakeMessage, PROTOCOL_DATA_POINT,
-        PROTOCOL_EKG, PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+        ForwardingVersionData, HandshakeMessage, PROTOCOL_DATA_POINT, PROTOCOL_EKG,
+        PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT, version_table_v1,
     };
     use hermod::server::datapoint::DataPointClient;
     use pallas_network::multiplexer::{Bearer, ChannelBuffer, Plexer};
@@ -935,8 +931,8 @@ async fn test_haskell_forwarder_datapoint_round_trip() {
 #[tokio::test]
 async fn test_haskell_forwarder_ekg_metrics() {
     use hermod::mux::{
-        version_table_v1, ForwardingVersionData, HandshakeMessage, PROTOCOL_DATA_POINT,
-        PROTOCOL_EKG, PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+        ForwardingVersionData, HandshakeMessage, PROTOCOL_DATA_POINT, PROTOCOL_EKG,
+        PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT, version_table_v1,
     };
     use hermod::server::ekg::EkgMessage;
     use pallas_network::multiplexer::{Bearer, ChannelBuffer, Plexer};
@@ -1048,8 +1044,8 @@ async fn test_haskell_forwarder_ekg_metrics() {
 #[tokio::test]
 async fn test_connectto_haskell_forwarder_responder() {
     use hermod::mux::{
-        version_table_v1, HandshakeMessage, TraceAcceptorClient, PROTOCOL_DATA_POINT,
-        PROTOCOL_EKG, PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+        HandshakeMessage, PROTOCOL_DATA_POINT, PROTOCOL_EKG, PROTOCOL_HANDSHAKE,
+        PROTOCOL_TRACE_OBJECT, TraceAcceptorClient, version_table_v1,
     };
     use pallas_network::multiplexer::{Bearer, ChannelBuffer, Plexer};
 

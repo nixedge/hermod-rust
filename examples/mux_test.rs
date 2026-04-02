@@ -5,8 +5,8 @@
 
 use chrono::Utc;
 use hermod::mux::{
-    version_table_v1, HandshakeMessage, TraceForwardClient, PROTOCOL_DATA_POINT, PROTOCOL_EKG,
-    PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+    HandshakeMessage, PROTOCOL_DATA_POINT, PROTOCOL_EKG, PROTOCOL_HANDSHAKE, PROTOCOL_TRACE_OBJECT,
+    TraceForwardClient, version_table_v1,
 };
 use hermod::protocol::{DetailLevel, Message, MsgTraceObjectsReply, Severity, TraceObject};
 use pallas_network::multiplexer::{Bearer, Plexer};
