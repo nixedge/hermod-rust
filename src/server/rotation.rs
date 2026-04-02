@@ -151,3 +151,70 @@ fn prune_old_files(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn write_file(dir: &std::path::Path, name: &str) {
+        fs::write(dir.join(name), name).unwrap();
+    }
+
+    #[test]
+    fn prune_nonexistent_dir_is_ok() {
+        let tmp = TempDir::new().unwrap();
+        let nonexistent = tmp.path().join("does-not-exist");
+        prune_old_files(&nonexistent, "log", 24, 10).unwrap();
+    }
+
+    #[test]
+    fn prune_within_count_limit_keeps_all_files() {
+        let tmp = TempDir::new().unwrap();
+        write_file(tmp.path(), "node-2024-01-01T00-00-00.log");
+        write_file(tmp.path(), "node-2024-01-02T00-00-00.log");
+        write_file(tmp.path(), "node-2024-01-03T00-00-00.log");
+        // max_age_hours=0 means no age pruning; keep_files_num=10 keeps all 3
+        prune_old_files(&tmp.path().to_path_buf(), "log", 0, 10).unwrap();
+        assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 3);
+    }
+
+    #[test]
+    fn prune_removes_excess_files_by_count() {
+        let tmp = TempDir::new().unwrap();
+        write_file(tmp.path(), "node-2024-01-01T00-00-00.log");
+        write_file(tmp.path(), "node-2024-01-02T00-00-00.log");
+        write_file(tmp.path(), "node-2024-01-03T00-00-00.log");
+        // keep_files_num=1 → prune 2 oldest (which have oldest mtime)
+        // (all files have the same mtime here since we write them immediately;
+        //  the sort is stable so at least 1 must survive)
+        prune_old_files(&tmp.path().to_path_buf(), "log", 0, 1).unwrap();
+        assert!(fs::read_dir(tmp.path()).unwrap().count() <= 1);
+    }
+
+    #[test]
+    fn prune_ignores_symlink_style_current_file() {
+        // node.log doesn't start with "node-" so it is never picked up as a candidate
+        let tmp = TempDir::new().unwrap();
+        write_file(tmp.path(), "node.log");
+        write_file(tmp.path(), "node-2024-01-01T00-00-00.log");
+        write_file(tmp.path(), "node-2024-01-02T00-00-00.log");
+        // keep 1 timestamped file; node.log is always preserved
+        prune_old_files(&tmp.path().to_path_buf(), "log", 0, 1).unwrap();
+        assert!(tmp.path().join("node.log").exists(), "node.log must survive");
+        // node.log + 1 timestamped = 2 files total
+        assert!(fs::read_dir(tmp.path()).unwrap().count() <= 2);
+    }
+
+    #[test]
+    fn prune_ignores_different_extension() {
+        // .json files should not be pruned when extension is "log"
+        let tmp = TempDir::new().unwrap();
+        write_file(tmp.path(), "node-2024-01-01T00-00-00.json");
+        write_file(tmp.path(), "node-2024-01-02T00-00-00.json");
+        prune_old_files(&tmp.path().to_path_buf(), "log", 0, 0).unwrap();
+        // keep_files_num=0 prunes all log files, but these are .json
+        assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 2);
+    }
+}

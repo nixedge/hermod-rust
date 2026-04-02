@@ -161,6 +161,27 @@ pub fn slugify(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::config::TracerConfig;
+
+    fn make_config() -> Arc<TracerConfig> {
+        Arc::new(
+            TracerConfig::from_yaml(
+                r#"
+networkMagic: 42
+network:
+  tag: AcceptAt
+  contents: "/tmp/hermod.sock"
+logging:
+- logRoot: "/tmp"
+  logMode: FileMode
+  logFormat: ForMachine
+"#,
+            )
+            .unwrap(),
+        )
+    }
+
+    // --- slugify ---
 
     #[test]
     fn test_slugify_unix_path() {
@@ -180,5 +201,97 @@ mod tests {
     #[test]
     fn test_slugify_empty_becomes_x() {
         assert_eq!(slugify("!!!"), "x");
+    }
+
+    #[test]
+    fn slugify_collapses_consecutive_separators() {
+        assert_eq!(slugify("a---b"), "a-b");
+        assert_eq!(slugify("--leading"), "leading");
+        assert_eq!(slugify("trailing--"), "trailing");
+    }
+
+    #[test]
+    fn slugify_uppercased_is_lowercased() {
+        assert_eq!(slugify("MyNode"), "mynode");
+    }
+
+    // --- NodeState ---
+
+    #[test]
+    fn node_state_slug_derived_from_name() {
+        let node = NodeState::new("conn-id".to_string(), "My Node".to_string());
+        assert_eq!(node.slug, "my-node");
+        assert_eq!(node.name, "My Node");
+        assert_eq!(node.id, "conn-id");
+    }
+
+    // --- TracerState ---
+
+    #[tokio::test]
+    async fn register_and_deregister_node() {
+        let state = TracerState::new(make_config());
+        state
+            .register("node1".to_string(), "Node One".to_string())
+            .await;
+        assert_eq!(state.node_list().await.len(), 1);
+        state.deregister(&"node1".to_string()).await;
+        assert_eq!(state.node_list().await.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn find_by_slug_returns_correct_node() {
+        let state = TracerState::new(make_config());
+        state
+            .register("node1".to_string(), "My Node".to_string())
+            .await;
+        let found = state.find_by_slug("my-node").await;
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "My Node");
+    }
+
+    #[tokio::test]
+    async fn find_by_slug_missing_returns_none() {
+        let state = TracerState::new(make_config());
+        assert!(state.find_by_slug("nonexistent").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn node_list_returns_name_and_slug_pairs() {
+        let state = TracerState::new(make_config());
+        state
+            .register("n1".to_string(), "Alpha".to_string())
+            .await;
+        state
+            .register("n2".to_string(), "Beta".to_string())
+            .await;
+        let list = state.node_list().await;
+        assert_eq!(list.len(), 2);
+        assert!(list.iter().any(|(name, slug)| name == "Alpha" && slug == "alpha"));
+        assert!(list.iter().any(|(name, slug)| name == "Beta" && slug == "beta"));
+    }
+
+    #[tokio::test]
+    async fn all_nodes_returns_arc_node_states() {
+        let state = TracerState::new(make_config());
+        state
+            .register("n1".to_string(), "One".to_string())
+            .await;
+        let all = state.all_nodes().await;
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].name, "One");
+    }
+
+    #[tokio::test]
+    async fn register_overwrites_existing_node_with_same_id() {
+        let state = TracerState::new(make_config());
+        state
+            .register("n1".to_string(), "First".to_string())
+            .await;
+        state
+            .register("n1".to_string(), "Second".to_string())
+            .await;
+        let list = state.node_list().await;
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].0, "Second");
     }
 }

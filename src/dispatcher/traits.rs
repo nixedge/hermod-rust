@@ -158,3 +158,84 @@ pub trait LogFormatting {
         vec![]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn silence_blocks_every_severity() {
+        for sev in [
+            Severity::Debug,
+            Severity::Info,
+            Severity::Notice,
+            Severity::Warning,
+            Severity::Error,
+            Severity::Critical,
+            Severity::Alert,
+            Severity::Emergency,
+        ] {
+            assert!(
+                !SeverityF::SILENCE.passes(sev),
+                "{:?} should be blocked by Silence",
+                sev
+            );
+        }
+    }
+
+    #[test]
+    fn warning_threshold_blocks_below_passes_at_and_above() {
+        let f = SeverityF(Some(Severity::Warning));
+        assert!(!f.passes(Severity::Debug));
+        assert!(!f.passes(Severity::Info));
+        assert!(!f.passes(Severity::Notice));
+        assert!(f.passes(Severity::Warning));
+        assert!(f.passes(Severity::Error));
+        assert!(f.passes(Severity::Critical));
+        assert!(f.passes(Severity::Alert));
+        assert!(f.passes(Severity::Emergency));
+    }
+
+    #[test]
+    fn default_is_warning() {
+        assert_eq!(SeverityF::default(), SeverityF(Some(Severity::Warning)));
+    }
+
+    #[test]
+    fn debug_threshold_passes_all() {
+        let f = SeverityF(Some(Severity::Debug));
+        for sev in [
+            Severity::Debug,
+            Severity::Info,
+            Severity::Notice,
+            Severity::Warning,
+            Severity::Error,
+            Severity::Critical,
+            Severity::Alert,
+            Severity::Emergency,
+        ] {
+            assert!(f.passes(sev), "{:?} should pass Debug threshold", sev);
+        }
+    }
+
+    #[test]
+    fn emergency_threshold_only_passes_emergency() {
+        let f = SeverityF(Some(Severity::Emergency));
+        for sev in [
+            Severity::Debug,
+            Severity::Info,
+            Severity::Notice,
+            Severity::Warning,
+            Severity::Error,
+            Severity::Critical,
+            Severity::Alert,
+        ] {
+            assert!(
+                !f.passes(sev),
+                "{:?} should be blocked by Emergency threshold",
+                sev
+            );
+        }
+        assert!(f.passes(Severity::Emergency));
+    }
+}

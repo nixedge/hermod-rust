@@ -227,3 +227,72 @@ fn strip_prometheus_suffixes(text: String) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strip(s: &str) -> String {
+        strip_prometheus_suffixes(s.to_string())
+    }
+
+    #[test]
+    fn strips_total_before_space() {
+        assert!(strip("my_metric_total 42\n").contains("my_metric 42"));
+        assert!(!strip("my_metric_total 42\n").contains("_total"));
+    }
+
+    #[test]
+    fn strips_total_before_brace() {
+        let out = strip(r#"my_metric_total{job="x"} 1"#);
+        assert!(out.contains(r#"my_metric{job="x"}"#));
+        assert!(!out.contains("_total"));
+    }
+
+    #[test]
+    fn strips_int_before_space() {
+        assert!(strip("my_metric_int 10\n").contains("my_metric 10"));
+    }
+
+    #[test]
+    fn strips_int_before_brace() {
+        let out = strip(r#"my_metric_int{a="b"} 5"#);
+        assert!(out.contains(r#"my_metric{a="b"}"#));
+    }
+
+    #[test]
+    fn strips_double_before_space() {
+        assert!(strip("my_metric_double 3.14\n").contains("my_metric 3.14"));
+    }
+
+    #[test]
+    fn strips_double_before_brace() {
+        let out = strip(r#"my_metric_double{} 1"#);
+        assert!(out.contains(r#"my_metric{} 1"#));
+    }
+
+    #[test]
+    fn comment_lines_are_unchanged() {
+        let input = "# HELP my_metric_total Some counter\n# TYPE my_metric_total counter\n";
+        let out = strip(input);
+        assert!(out.contains("my_metric_total"));
+        // Both comment lines should be present
+        assert!(out.contains("# HELP"));
+        assert!(out.contains("# TYPE"));
+    }
+
+    #[test]
+    fn line_without_known_suffix_unchanged() {
+        let line = "my_metric 42";
+        let out = strip(line);
+        assert_eq!(out, "my_metric 42");
+    }
+
+    #[test]
+    fn mixed_lines_only_data_lines_stripped() {
+        let input = "# TYPE c_total counter\nc_total 1\n";
+        let out = strip(input);
+        assert!(out.contains("# TYPE c_total counter")); // comment unchanged
+        assert!(out.contains("c 1")); // data line stripped
+    }
+}

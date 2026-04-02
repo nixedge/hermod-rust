@@ -328,12 +328,29 @@ impl TraceForwarder {
 mod tests {
     use super::*;
 
+    use crate::protocol::types::{DetailLevel, Severity, TraceObject};
+    use chrono::Utc;
+
+    fn make_trace() -> TraceObject {
+        TraceObject {
+            to_human: None,
+            to_machine: "{}".to_string(),
+            to_namespace: vec!["Test".to_string()],
+            to_severity: Severity::Info,
+            to_details: DetailLevel::DNormal,
+            to_timestamp: Utc::now(),
+            to_hostname: "host".to_string(),
+            to_thread_id: "1".to_string(),
+        }
+    }
+
     #[test]
     fn test_forwarder_config_default() {
         let config = ForwarderConfig::default();
         assert_eq!(config.queue_size, 1000);
         assert_eq!(config.max_reconnect_delay, 45);
         assert!(matches!(config.address, ForwarderAddress::Unix(_)));
+        assert!(config.node_name.is_none());
     }
 
     #[test]
@@ -343,5 +360,42 @@ mod tests {
 
         let tcp = ForwarderAddress::Tcp("127.0.0.1".to_string(), 9090);
         assert_eq!(tcp.to_string(), "127.0.0.1:9090");
+    }
+
+    #[test]
+    fn try_send_succeeds_when_queue_has_space() {
+        let forwarder = TraceForwarder::new(ForwarderConfig {
+            queue_size: 10,
+            ..Default::default()
+        });
+        let handle = forwarder.handle();
+        assert!(handle.try_send(make_trace()).is_ok());
+        // Keep forwarder alive (owns the receiver)
+        drop(forwarder);
+    }
+
+    #[test]
+    fn try_send_returns_queue_full_when_channel_full() {
+        let forwarder = TraceForwarder::new(ForwarderConfig {
+            queue_size: 1,
+            ..Default::default()
+        });
+        let handle = forwarder.handle();
+        // Fill the single-slot queue
+        let _ = handle.try_send(make_trace());
+        // Next send must fail
+        let result = handle.try_send(make_trace());
+        assert!(
+            matches!(result, Err(ForwarderError::QueueFull)),
+            "expected QueueFull, got {:?}",
+            result
+        );
+        drop(forwarder);
+    }
+
+    #[test]
+    fn forwarder_address_tcp_variant() {
+        let addr = ForwarderAddress::Tcp("localhost".to_string(), 3001);
+        assert_eq!(addr.to_string(), "localhost:3001");
     }
 }

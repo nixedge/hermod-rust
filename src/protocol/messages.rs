@@ -126,3 +126,150 @@ impl<'b> Decode<'b, ()> for Message {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::types::{DetailLevel, Severity, TraceObject};
+    use chrono::Utc;
+    use pallas_codec::minicbor;
+
+    fn encode_msg(msg: &Message) -> Vec<u8> {
+        let mut buf = Vec::new();
+        minicbor::encode_with(msg, &mut buf, &mut ()).unwrap();
+        buf
+    }
+
+    fn decode_msg(buf: &[u8]) -> Message {
+        minicbor::decode_with(buf, &mut ()).unwrap()
+    }
+
+    fn make_trace() -> TraceObject {
+        TraceObject {
+            to_human: Some("hello".to_string()),
+            to_machine: r#"{"msg":"hello"}"#.to_string(),
+            to_namespace: vec!["Test".to_string(), "Message".to_string()],
+            to_severity: Severity::Info,
+            to_details: DetailLevel::DNormal,
+            to_timestamp: Utc::now(),
+            to_hostname: "localhost".to_string(),
+            to_thread_id: "42".to_string(),
+        }
+    }
+
+    // --- MsgDone ---
+
+    #[test]
+    fn done_round_trip() {
+        let buf = encode_msg(&Message::Done);
+        assert!(matches!(decode_msg(&buf), Message::Done));
+    }
+
+    #[test]
+    fn done_exact_bytes() {
+        // array(1)[2] = 0x81, 0x02
+        assert_eq!(encode_msg(&Message::Done), &[0x81, 0x02]);
+    }
+
+    // --- MsgTraceObjectsRequest ---
+
+    #[test]
+    fn request_blocking_round_trip() {
+        let req = Message::TraceObjectsRequest(MsgTraceObjectsRequest {
+            blocking: true,
+            number_of_trace_objects: 100,
+        });
+        match decode_msg(&encode_msg(&req)) {
+            Message::TraceObjectsRequest(r) => {
+                assert!(r.blocking);
+                assert_eq!(r.number_of_trace_objects, 100);
+            }
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn request_non_blocking_round_trip() {
+        let req = Message::TraceObjectsRequest(MsgTraceObjectsRequest {
+            blocking: false,
+            number_of_trace_objects: 10,
+        });
+        match decode_msg(&encode_msg(&req)) {
+            Message::TraceObjectsRequest(r) => {
+                assert!(!r.blocking);
+                assert_eq!(r.number_of_trace_objects, 10);
+            }
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn request_zero_count_round_trip() {
+        let req = Message::TraceObjectsRequest(MsgTraceObjectsRequest {
+            blocking: false,
+            number_of_trace_objects: 0,
+        });
+        match decode_msg(&encode_msg(&req)) {
+            Message::TraceObjectsRequest(r) => assert_eq!(r.number_of_trace_objects, 0),
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    // --- MsgTraceObjectsReply ---
+
+    #[test]
+    fn reply_empty_round_trip() {
+        let reply = Message::TraceObjectsReply(MsgTraceObjectsReply {
+            trace_objects: vec![],
+        });
+        match decode_msg(&encode_msg(&reply)) {
+            Message::TraceObjectsReply(r) => assert!(r.trace_objects.is_empty()),
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn reply_with_trace_round_trip() {
+        let trace = make_trace();
+        let reply = Message::TraceObjectsReply(MsgTraceObjectsReply {
+            trace_objects: vec![trace.clone()],
+        });
+        match decode_msg(&encode_msg(&reply)) {
+            Message::TraceObjectsReply(r) => {
+                assert_eq!(r.trace_objects.len(), 1);
+                assert_eq!(r.trace_objects[0].to_machine, trace.to_machine);
+                assert_eq!(r.trace_objects[0].to_namespace, trace.to_namespace);
+                assert_eq!(r.trace_objects[0].to_human, trace.to_human);
+                assert_eq!(r.trace_objects[0].to_severity, trace.to_severity);
+                assert_eq!(r.trace_objects[0].to_hostname, trace.to_hostname);
+                assert_eq!(r.trace_objects[0].to_thread_id, trace.to_thread_id);
+            }
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn reply_with_multiple_traces_round_trip() {
+        let traces: Vec<TraceObject> = (0..5).map(|_| make_trace()).collect();
+        let reply = Message::TraceObjectsReply(MsgTraceObjectsReply {
+            trace_objects: traces,
+        });
+        match decode_msg(&encode_msg(&reply)) {
+            Message::TraceObjectsReply(r) => assert_eq!(r.trace_objects.len(), 5),
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn reply_trace_with_no_human_round_trip() {
+        let mut trace = make_trace();
+        trace.to_human = None;
+        let reply = Message::TraceObjectsReply(MsgTraceObjectsReply {
+            trace_objects: vec![trace],
+        });
+        match decode_msg(&encode_msg(&reply)) {
+            Message::TraceObjectsReply(r) => assert!(r.trace_objects[0].to_human.is_none()),
+            _ => panic!("wrong message type"),
+        }
+    }
+}

@@ -121,3 +121,90 @@ impl<'b> Decode<'b, ()> for HandshakeMessage {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pallas_codec::minicbor;
+
+    fn encode<T: minicbor::Encode<()>>(value: &T) -> Vec<u8> {
+        let mut buf = Vec::new();
+        minicbor::encode_with(value, &mut buf, &mut ()).unwrap();
+        buf
+    }
+
+    fn decode<T: for<'b> minicbor::Decode<'b, ()>>(buf: &[u8]) -> T {
+        minicbor::decode_with(buf, &mut ()).unwrap()
+    }
+
+    #[test]
+    fn version_data_round_trip() {
+        let data = ForwardingVersionData {
+            network_magic: 764824073,
+        };
+        let buf = encode(&data);
+        let decoded: ForwardingVersionData = decode(&buf);
+        assert_eq!(decoded.network_magic, 764824073);
+    }
+
+    #[test]
+    fn version_table_v1_has_single_version_1() {
+        let table = version_table_v1(12345);
+        assert_eq!(table.len(), 1);
+        assert!(table.contains_key(&1));
+        assert_eq!(table[&1].network_magic, 12345);
+    }
+
+    #[test]
+    fn propose_round_trip() {
+        let versions = version_table_v1(764824073);
+        let msg = HandshakeMessage::Propose(versions);
+        let buf = encode(&msg);
+        let decoded: HandshakeMessage = decode(&buf);
+        match decoded {
+            HandshakeMessage::Propose(v) => {
+                assert!(v.contains_key(&1));
+                assert_eq!(v[&1].network_magic, 764824073);
+            }
+            _ => panic!("expected Propose, got something else"),
+        }
+    }
+
+    #[test]
+    fn accept_round_trip() {
+        let msg = HandshakeMessage::Accept(1, ForwardingVersionData { network_magic: 42 });
+        let buf = encode(&msg);
+        let decoded: HandshakeMessage = decode(&buf);
+        match decoded {
+            HandshakeMessage::Accept(ver, data) => {
+                assert_eq!(ver, 1);
+                assert_eq!(data.network_magic, 42);
+            }
+            _ => panic!("expected Accept"),
+        }
+    }
+
+    #[test]
+    fn refuse_round_trip() {
+        let msg = HandshakeMessage::Refuse(vec![1, 2, 3]);
+        let buf = encode(&msg);
+        let decoded: HandshakeMessage = decode(&buf);
+        match decoded {
+            HandshakeMessage::Refuse(mut versions) => {
+                versions.sort_unstable();
+                assert_eq!(versions, vec![1, 2, 3]);
+            }
+            _ => panic!("expected Refuse"),
+        }
+    }
+
+    #[test]
+    fn refuse_empty_versions_round_trip() {
+        let msg = HandshakeMessage::Refuse(vec![]);
+        let buf = encode(&msg);
+        match decode::<HandshakeMessage>(&buf) {
+            HandshakeMessage::Refuse(v) => assert!(v.is_empty()),
+            _ => panic!("expected Refuse"),
+        }
+    }
+}

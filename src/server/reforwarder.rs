@@ -291,3 +291,117 @@ async fn handle_accepting_connection(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::types::{DetailLevel, Severity, TraceObject};
+    use chrono::Utc;
+
+    fn make_trace(namespace: Vec<&str>) -> TraceObject {
+        TraceObject {
+            to_human: None,
+            to_machine: "{}".to_string(),
+            to_namespace: namespace.into_iter().map(str::to_string).collect(),
+            to_severity: Severity::Info,
+            to_details: DetailLevel::DNormal,
+            to_timestamp: Utc::now(),
+            to_hostname: "host".to_string(),
+            to_thread_id: "1".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn no_filter_forwards_all_traces() {
+        let (tx, mut rx) = broadcast::channel(16);
+        let rf = ReForwarder::new_inbound(tx, None);
+        let traces = vec![make_trace(vec!["A", "B"]), make_trace(vec!["C"])];
+        rf.forward(&traces).await;
+        let received = rx.recv().await.unwrap();
+        assert_eq!(received.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn prefix_filter_blocks_non_matching_namespace() {
+        let (tx, mut rx) = broadcast::channel(16);
+        let filters = Some(vec![vec!["Cardano".to_string(), "Node".to_string()]]);
+        let rf = ReForwarder::new_inbound(tx, filters);
+        let traces = vec![
+            make_trace(vec!["Cardano", "Node", "Peers"]),
+            make_trace(vec!["Other", "Trace"]),
+        ];
+        rf.forward(&traces).await;
+        let received = rx.recv().await.unwrap();
+        assert_eq!(received.len(), 1);
+        assert_eq!(
+            received[0].to_namespace,
+            vec!["Cardano", "Node", "Peers"]
+        );
+    }
+
+    #[tokio::test]
+    async fn prefix_filter_exact_match_passes() {
+        let (tx, mut rx) = broadcast::channel(16);
+        let filters = Some(vec![vec!["Cardano".to_string(), "Node".to_string()]]);
+        let rf = ReForwarder::new_inbound(tx, filters);
+        let traces = vec![make_trace(vec!["Cardano", "Node"])];
+        rf.forward(&traces).await;
+        let received = rx.recv().await.unwrap();
+        assert_eq!(received.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn filter_all_out_sends_nothing() {
+        let (tx, mut rx) = broadcast::channel(16);
+        let filters = Some(vec![vec!["Cardano".to_string()]]);
+        let rf = ReForwarder::new_inbound(tx, filters);
+        let traces = vec![make_trace(vec!["Other"])];
+        rf.forward(&traces).await;
+        assert!(rx.try_recv().is_err(), "nothing should be broadcast");
+    }
+
+    #[tokio::test]
+    async fn multiple_prefixes_any_match_passes() {
+        let (tx, mut rx) = broadcast::channel(16);
+        let filters = Some(vec![
+            vec!["Cardano".to_string()],
+            vec!["Node".to_string()],
+        ]);
+        let rf = ReForwarder::new_inbound(tx, filters);
+        let traces = vec![
+            make_trace(vec!["Cardano", "X"]),
+            make_trace(vec!["Node", "Y"]),
+            make_trace(vec!["Other"]),
+        ];
+        rf.forward(&traces).await;
+        let received = rx.recv().await.unwrap();
+        assert_eq!(received.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn empty_input_sends_nothing() {
+        let (tx, mut rx) = broadcast::channel(16);
+        let rf = ReForwarder::new_inbound(tx, None);
+        rf.forward(&[]).await;
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn inbound_with_no_receivers_does_not_panic() {
+        let (tx, rx) = broadcast::channel::<Arc<Vec<TraceObject>>>(16);
+        drop(rx); // no receivers
+        let rf = ReForwarder::new_inbound(tx, None);
+        // Should not panic even with no receivers
+        rf.forward(&[make_trace(vec!["A"])]).await;
+    }
+
+    #[tokio::test]
+    async fn inbound_broadcasts_to_multiple_receivers() {
+        let (tx, mut rx1) = broadcast::channel(16);
+        let mut rx2 = tx.subscribe();
+        let rf = ReForwarder::new_inbound(tx, None);
+        rf.forward(&[make_trace(vec!["A"])]).await;
+        assert_eq!(rx1.recv().await.unwrap().len(), 1);
+        assert_eq!(rx2.recv().await.unwrap().len(), 1);
+    }
+}

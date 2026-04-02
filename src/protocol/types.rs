@@ -334,26 +334,168 @@ impl<'b> Decode<'b, ()> for TraceObject {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pallas_codec::minicbor;
+
+    fn encode<T: minicbor::Encode<()>>(value: &T) -> Vec<u8> {
+        let mut buf = Vec::new();
+        minicbor::encode_with(value, &mut buf, &mut ()).unwrap();
+        buf
+    }
+
+    fn decode<T: for<'b> minicbor::Decode<'b, ()>>(buf: &[u8]) -> T {
+        minicbor::decode_with(buf, &mut ()).unwrap()
+    }
+
+    // --- Severity ---
 
     #[test]
     fn test_severity_encoding() {
-        let mut buf = Vec::new();
-        let mut encoder = pallas_codec::minicbor::Encoder::new(&mut buf);
-        Severity::Info.encode(&mut encoder, &mut ()).unwrap();
-
-        let mut decoder = pallas_codec::minicbor::Decoder::new(&buf);
-        let decoded = Severity::decode(&mut decoder, &mut ()).unwrap();
-        assert_eq!(decoded, Severity::Info);
+        // Existing smoke-test kept for reference
+        assert_eq!(decode::<Severity>(&encode(&Severity::Info)), Severity::Info);
     }
 
     #[test]
-    fn test_detail_level_encoding() {
-        let mut buf = Vec::new();
-        let mut encoder = pallas_codec::minicbor::Encoder::new(&mut buf);
-        DetailLevel::DNormal.encode(&mut encoder, &mut ()).unwrap();
+    fn all_severity_variants_round_trip() {
+        for sev in [
+            Severity::Debug,
+            Severity::Info,
+            Severity::Notice,
+            Severity::Warning,
+            Severity::Error,
+            Severity::Critical,
+            Severity::Alert,
+            Severity::Emergency,
+        ] {
+            let decoded = decode::<Severity>(&encode(&sev));
+            assert_eq!(decoded, sev, "Severity::{:?} round-trip failed", sev);
+        }
+    }
 
-        let mut decoder = pallas_codec::minicbor::Decoder::new(&buf);
-        let decoded = DetailLevel::decode(&mut decoder, &mut ()).unwrap();
-        assert_eq!(decoded, DetailLevel::DNormal);
+    #[test]
+    fn severity_encoded_as_array1_constructor_index() {
+        // Haskell Generic Serialise: array(1)[index]
+        // Debug=0 → 0x81 0x00
+        assert_eq!(encode(&Severity::Debug), &[0x81, 0x00]);
+        // Emergency=7 → 0x81 0x07
+        assert_eq!(encode(&Severity::Emergency), &[0x81, 0x07]);
+    }
+
+    // --- DetailLevel ---
+
+    #[test]
+    fn test_detail_level_encoding() {
+        assert_eq!(
+            decode::<DetailLevel>(&encode(&DetailLevel::DNormal)),
+            DetailLevel::DNormal
+        );
+    }
+
+    #[test]
+    fn all_detail_level_variants_round_trip() {
+        for dl in [
+            DetailLevel::DMinimal,
+            DetailLevel::DNormal,
+            DetailLevel::DDetailed,
+            DetailLevel::DMaximum,
+        ] {
+            let decoded = decode::<DetailLevel>(&encode(&dl));
+            assert_eq!(decoded, dl, "DetailLevel::{:?} round-trip failed", dl);
+        }
+    }
+
+    // --- TraceObject ---
+
+    fn make_trace_object(to_human: Option<&str>) -> TraceObject {
+        TraceObject {
+            to_human: to_human.map(str::to_string),
+            to_machine: r#"{"k":1}"#.to_string(),
+            to_namespace: vec!["Cardano".to_string(), "Node".to_string()],
+            to_severity: Severity::Warning,
+            to_details: DetailLevel::DDetailed,
+            to_timestamp: chrono::DateTime::from_timestamp(1_700_000_000, 500_000_000)
+                .unwrap(),
+            to_hostname: "node-1".to_string(),
+            to_thread_id: "99".to_string(),
+        }
+    }
+
+    #[test]
+    fn trace_object_with_human_round_trip() {
+        let original = make_trace_object(Some("human readable"));
+        let decoded = decode::<TraceObject>(&encode(&original));
+        assert_eq!(decoded.to_human, Some("human readable".to_string()));
+        assert_eq!(decoded.to_machine, original.to_machine);
+        assert_eq!(decoded.to_namespace, original.to_namespace);
+        assert_eq!(decoded.to_severity, original.to_severity);
+        assert_eq!(decoded.to_details, original.to_details);
+        assert_eq!(decoded.to_hostname, original.to_hostname);
+        assert_eq!(decoded.to_thread_id, original.to_thread_id);
+        // Timestamp preserved to nanosecond precision
+        assert_eq!(
+            decoded.to_timestamp.timestamp(),
+            original.to_timestamp.timestamp()
+        );
+        assert_eq!(
+            decoded.to_timestamp.timestamp_subsec_nanos(),
+            original.to_timestamp.timestamp_subsec_nanos()
+        );
+    }
+
+    #[test]
+    fn trace_object_without_human_round_trip() {
+        let original = make_trace_object(None);
+        let decoded = decode::<TraceObject>(&encode(&original));
+        assert_eq!(decoded.to_human, None);
+    }
+
+    #[test]
+    fn trace_object_empty_namespace_round_trip() {
+        let mut original = make_trace_object(None);
+        original.to_namespace = vec![];
+        let decoded = decode::<TraceObject>(&encode(&original));
+        assert!(decoded.to_namespace.is_empty());
+    }
+
+    #[test]
+    fn timestamp_tag1_compat_decode() {
+        // Build CBOR that uses tag(1) + float for the timestamp field (compatibility path)
+        // We construct a full TraceObject byte string with tag(1) instead of tag(1000)
+        // by encoding everything manually and substituting the timestamp.
+        let original = make_trace_object(None);
+        let normal_buf = encode(&original);
+
+        // Find the tag-1000 bytes and replace with tag-1 + float
+        // Simpler: build the expected bytes manually and verify the decoder accepts them.
+        // Tag 1 in CBOR = 0xC1, followed by float64
+        let secs = original.to_timestamp.timestamp() as f64;
+        let mut buf: Vec<u8> = Vec::new();
+        let mut enc = minicbor::Encoder::new(&mut buf);
+
+        // Encode array(9) header + constructor index + 6 fields, then tag(1)+float64+hostname+threadid
+        enc.array(9).unwrap().u8(0).unwrap();
+        // to_human = None → array(0)
+        enc.array(0).unwrap();
+        // to_machine
+        enc.str(r#"{"k":1}"#).unwrap();
+        // to_namespace = [] (simplified)
+        enc.array(0).unwrap();
+        // to_severity (Warning=3)
+        enc.array(1).unwrap().u8(3).unwrap();
+        // to_details (DDetailed=2)
+        enc.array(1).unwrap().u8(2).unwrap();
+        // to_timestamp via tag(1) + float64
+        enc.tag(minicbor::data::Tag::new(1))
+            .unwrap()
+            .f64(secs)
+            .unwrap();
+        // to_hostname
+        enc.str("node-1").unwrap();
+        // to_thread_id
+        enc.str("99").unwrap();
+
+        let decoded = decode::<TraceObject>(&buf);
+        assert_eq!(decoded.to_timestamp.timestamp(), original.to_timestamp.timestamp());
+        // Discard the `normal_buf` usage warning
+        let _ = normal_buf;
     }
 }

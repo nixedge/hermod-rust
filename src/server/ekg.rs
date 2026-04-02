@@ -400,3 +400,192 @@ fn sanitise_name(name: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pallas_codec::minicbor;
+
+    fn encode<T: minicbor::Encode<()>>(value: &T) -> Vec<u8> {
+        let mut buf = Vec::new();
+        minicbor::encode_with(value, &mut buf, &mut ()).unwrap();
+        buf
+    }
+
+    fn decode<T: for<'b> minicbor::Decode<'b, ()>>(buf: &[u8]) -> T {
+        minicbor::decode_with(buf, &mut ()).unwrap()
+    }
+
+    type GaugeCache = Mutex<HashMap<String, GaugeVec>>;
+    type CounterCache = Mutex<HashMap<String, IntCounterVec>>;
+    type CounterValues = Mutex<HashMap<String, i64>>;
+
+    fn empty_caches() -> (GaugeCache, GaugeCache, CounterCache, CounterValues) {
+        (
+            Mutex::new(HashMap::new()),
+            Mutex::new(HashMap::new()),
+            Mutex::new(HashMap::new()),
+            Mutex::new(HashMap::new()),
+        )
+    }
+
+    // --- EkgValue CBOR ---
+
+    #[test]
+    fn ekg_value_counter_round_trip() {
+        let v = EkgValue::Counter(-42);
+        assert!(matches!(decode::<EkgValue>(&encode(&v)), EkgValue::Counter(-42)));
+    }
+
+    #[test]
+    fn ekg_value_gauge_round_trip() {
+        let v = EkgValue::Gauge(100);
+        assert!(matches!(decode::<EkgValue>(&encode(&v)), EkgValue::Gauge(100)));
+    }
+
+    #[test]
+    fn ekg_value_label_round_trip() {
+        let v = EkgValue::Label("RTS v1.0".to_string());
+        match decode::<EkgValue>(&encode(&v)) {
+            EkgValue::Label(s) => assert_eq!(s, "RTS v1.0"),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    // --- EkgMessage CBOR ---
+
+    #[test]
+    fn ekg_req_get_all_round_trip() {
+        assert!(matches!(
+            decode::<EkgMessage>(&encode(&EkgMessage::Req(true))),
+            EkgMessage::Req(true)
+        ));
+    }
+
+    #[test]
+    fn ekg_req_get_updated_round_trip() {
+        assert!(matches!(
+            decode::<EkgMessage>(&encode(&EkgMessage::Req(false))),
+            EkgMessage::Req(false)
+        ));
+    }
+
+    #[test]
+    fn ekg_done_round_trip() {
+        assert!(matches!(
+            decode::<EkgMessage>(&encode(&EkgMessage::Done)),
+            EkgMessage::Done
+        ));
+    }
+
+    #[test]
+    fn ekg_resp_round_trip() {
+        let mut metrics = HashMap::new();
+        metrics.insert("cpu".to_string(), EkgValue::Gauge(75));
+        metrics.insert("mem".to_string(), EkgValue::Counter(1024));
+        metrics.insert("rts".to_string(), EkgValue::Label("v1".to_string()));
+        let msg = EkgMessage::Resp(metrics);
+        match decode::<EkgMessage>(&encode(&msg)) {
+            EkgMessage::Resp(m) => {
+                assert_eq!(m.len(), 3);
+                assert!(matches!(m["cpu"], EkgValue::Gauge(75)));
+                assert!(matches!(m["mem"], EkgValue::Counter(1024)));
+                assert!(matches!(m["rts"], EkgValue::Label(ref s) if s == "v1"));
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn ekg_resp_empty_round_trip() {
+        let msg = EkgMessage::Resp(HashMap::new());
+        match decode::<EkgMessage>(&encode(&msg)) {
+            EkgMessage::Resp(m) => assert!(m.is_empty()),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    // --- update_metric ---
+
+    #[test]
+    fn update_metric_gauge_sets_value() {
+        let registry = Registry::new();
+        let (gc, lgc, cc, cv) = empty_caches();
+        update_metric(&registry, "my_gauge", &EkgValue::Gauge(42), &gc, &lgc, &cc, &cv).unwrap();
+        let families = registry.gather();
+        assert_eq!(families.len(), 1);
+        assert_eq!(families[0].get_name(), "my_gauge");
+        assert_eq!(families[0].get_metric()[0].get_gauge().get_value(), 42.0);
+    }
+
+    #[test]
+    fn update_metric_gauge_overwrites() {
+        let registry = Registry::new();
+        let (gc, lgc, cc, cv) = empty_caches();
+        update_metric(&registry, "g", &EkgValue::Gauge(10), &gc, &lgc, &cc, &cv).unwrap();
+        update_metric(&registry, "g", &EkgValue::Gauge(99), &gc, &lgc, &cc, &cv).unwrap();
+        let families = registry.gather();
+        assert_eq!(families[0].get_metric()[0].get_gauge().get_value(), 99.0);
+    }
+
+    #[test]
+    fn update_metric_counter_accumulates_deltas() {
+        let registry = Registry::new();
+        let (gc, lgc, cc, cv) = empty_caches();
+        update_metric(&registry, "ops", &EkgValue::Counter(5), &gc, &lgc, &cc, &cv).unwrap();
+        update_metric(&registry, "ops", &EkgValue::Counter(8), &gc, &lgc, &cc, &cv).unwrap();
+        let families = registry.gather();
+        let ops = families.iter().find(|f| f.get_name() == "ops").unwrap();
+        // First: delta = 5-0 = 5; second: delta = 8-5 = 3; total = 8
+        assert_eq!(ops.get_metric()[0].get_counter().get_value(), 8.0);
+    }
+
+    #[test]
+    fn update_metric_counter_ignores_decreasing_value() {
+        // Counter going backwards (e.g. node restart) should not produce negative deltas
+        let registry = Registry::new();
+        let (gc, lgc, cc, cv) = empty_caches();
+        update_metric(&registry, "c", &EkgValue::Counter(10), &gc, &lgc, &cc, &cv).unwrap();
+        update_metric(&registry, "c", &EkgValue::Counter(3), &gc, &lgc, &cc, &cv).unwrap();
+        let families = registry.gather();
+        // Only the first delta (10) was applied; the backwards step was skipped
+        assert_eq!(families[0].get_metric()[0].get_counter().get_value(), 10.0);
+    }
+
+    #[test]
+    fn update_metric_label_creates_info_gauge_with_value_label() {
+        let registry = Registry::new();
+        let (gc, lgc, cc, cv) = empty_caches();
+        update_metric(
+            &registry,
+            "rts_version",
+            &EkgValue::Label("RTS v1.0".to_string()),
+            &gc,
+            &lgc,
+            &cc,
+            &cv,
+        )
+        .unwrap();
+        let families = registry.gather();
+        let info = families
+            .iter()
+            .find(|f| f.get_name() == "rts_version_info")
+            .expect("rts_version_info metric should exist");
+        let metric = &info.get_metric()[0];
+        assert_eq!(metric.get_gauge().get_value(), 1.0);
+        let labels = metric.get_label();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].get_name(), "value");
+        assert_eq!(labels[0].get_value(), "RTS v1.0");
+    }
+
+    #[test]
+    fn sanitise_name_replaces_dots_and_slashes() {
+        assert_eq!(sanitise_name("a.b/c"), "a_b_c");
+    }
+
+    #[test]
+    fn sanitise_name_keeps_alphanumeric_and_underscore() {
+        assert_eq!(sanitise_name("abc_123"), "abc_123");
+    }
+}
