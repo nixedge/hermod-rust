@@ -10,6 +10,7 @@ use crate::mux::{
 };
 use crate::protocol::TraceObject;
 use crate::server::datapoint::DataPointMessage;
+use chrono::{DateTime, Utc};
 use pallas_network::multiplexer::{Bearer, ChannelBuffer, Plexer};
 use std::path::PathBuf;
 use thiserror::Error;
@@ -58,6 +59,17 @@ pub struct ForwarderConfig {
 
     /// Cardano network magic (must match the acceptor's)
     pub network_magic: u64,
+
+    /// Node display name advertised via the `NodeInfo` DataPoint.
+    ///
+    /// When `Some`, the forwarder responds to `"NodeInfo"` DataPoint requests
+    /// with `{"niName": name, ...}`, which `hermod-tracer` (and Haskell
+    /// `cardano-tracer`) use as the node's display name, Prometheus slug, and
+    /// log subdirectory name.
+    ///
+    /// When `None`, the acceptor falls back to the connection-address node ID
+    /// (e.g. `unix-1` for the first inbound Unix socket connection).
+    pub node_name: Option<String>,
 }
 
 impl Default for ForwarderConfig {
@@ -67,6 +79,7 @@ impl Default for ForwarderConfig {
             queue_size: 1000,
             max_reconnect_delay: 45,
             network_magic: 764824073,
+            node_name: None,
         }
     }
 }
@@ -103,6 +116,8 @@ pub struct TraceForwarder {
     config: ForwarderConfig,
     rx: mpsc::Receiver<TraceObject>,
     handle: ForwarderHandle,
+    /// When this forwarder process started (used in `NodeInfo` DataPoint replies)
+    start_time: DateTime<Utc>,
 }
 
 impl TraceForwarder {
@@ -110,7 +125,12 @@ impl TraceForwarder {
     pub fn new(config: ForwarderConfig) -> Self {
         let (tx, rx) = mpsc::channel(config.queue_size);
         let handle = ForwarderHandle { tx };
-        Self { config, rx, handle }
+        Self {
+            config,
+            rx,
+            handle,
+            start_time: Utc::now(),
+        }
     }
 
     /// Get a handle for sending traces
@@ -159,16 +179,40 @@ impl TraceForwarder {
 
         let _plexer_handle = plexer.spawn();
 
-        // Respond to DataPoint requests with empty replies.
-        // The acceptor may request "NodeInfo" to resolve our display name;
-        // we reply with None for each requested name so it falls back to the
-        // connection-address node ID.
+        // Respond to DataPoint requests.
+        // The acceptor requests "NodeInfo" immediately after the handshake to
+        // resolve our display name.  We serialise a NodeInfo-compatible JSON
+        // object so the acceptor can extract `niName` and use it as the node's
+        // display name, Prometheus slug, and log subdirectory name.
+        let node_info_bytes: Option<Vec<u8>> = self.config.node_name.as_deref().map(|name| {
+            serde_json::json!({
+                "niName":            name,
+                "niProtocol":        "",
+                "niVersion":         env!("CARGO_PKG_VERSION"),
+                "niCommit":          "",
+                "niStartTime":       self.start_time,
+                "niSystemStartTime": self.start_time,
+            })
+            .to_string()
+            .into_bytes()
+        });
+
         tokio::spawn(async move {
             let mut buf = ChannelBuffer::new(datapoint_channel);
             while let Ok(DataPointMessage::Request(names)) =
                 buf.recv_full_msg::<DataPointMessage>().await
             {
-                let reply: Vec<_> = names.into_iter().map(|n| (n, None)).collect();
+                let reply = names
+                    .into_iter()
+                    .map(|n| {
+                        let val = if n == "NodeInfo" {
+                            node_info_bytes.clone()
+                        } else {
+                            None
+                        };
+                        (n, val)
+                    })
+                    .collect();
                 if buf
                     .send_msg_chunks(&DataPointMessage::Reply(reply))
                     .await

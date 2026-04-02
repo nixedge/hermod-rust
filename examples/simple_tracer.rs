@@ -19,6 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         queue_size: 1000,
         max_reconnect_delay: 45,
         network_magic: 764824073,
+        node_name: None,
     };
 
     // Create the forwarder

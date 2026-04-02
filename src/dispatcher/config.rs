@@ -150,6 +150,27 @@ impl TraceConfig {
         })
     }
 
+    /// Build a [`crate::forwarder::ForwarderConfig`] from this `TraceConfig`.
+    ///
+    /// Returns `None` if `self.forwarder` is not set (no forwarder configured).
+    /// The `node_name` field is propagated automatically so the forwarder
+    /// advertises the correct name via the `NodeInfo` DataPoint.
+    pub fn forwarder_config(&self) -> Option<crate::forwarder::ForwarderConfig> {
+        let opts = self.forwarder.as_ref()?;
+        let mut cfg = crate::forwarder::ForwarderConfig::default();
+        if let Some(path) = &opts.socket_path {
+            cfg.socket_path = std::path::PathBuf::from(path);
+        }
+        if let Some(qs) = opts.queue_size {
+            cfg.queue_size = qs as usize;
+        }
+        if let Some(delay) = opts.max_reconnect_delay {
+            cfg.max_reconnect_delay = delay as u64;
+        }
+        cfg.node_name = self.node_name.clone();
+        Some(cfg)
+    }
+
     /// Parse a `TraceConfig` from a YAML file
     pub fn from_yaml(path: &Path) -> Result<Self> {
         let content =

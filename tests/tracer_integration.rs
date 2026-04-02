@@ -67,6 +67,7 @@ async fn test_tracer_server_file_logging() {
         queue_size: 100,
         network_magic: 42,
         max_reconnect_delay: 5,
+        node_name: Some("test-node".to_string()),
     };
     let forwarder = TraceForwarder::new(fwd_config);
     let handle = forwarder.handle();
